@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from app.routes import users
+from app.middleware.validate_email import validate_email
 
 app = FastAPI()
+
+app.middleware("http")(validate_email)
 
 @app.get("/")
 async def root():

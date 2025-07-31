@@ -24,6 +24,9 @@ async def get_users():
 
 @router.get("/{user_id}", summary="Get user by ID")
 async def get_user_by_id(user_id: str):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -38,6 +41,9 @@ async def get_user_by_email(email: str):
 
 @router.put("/{user_id}", summary="Update user by ID")
 async def update_user(user_id: str, updated_user: User):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
     update_data = updated_user.dict()
     result = await users_collection.update_one(
         {"_id": ObjectId(user_id)}, {"$set": update_data}
@@ -50,6 +56,9 @@ async def update_user(user_id: str, updated_user: User):
 
 @router.patch("/{user_id}", summary="Update user partially by ID")
 async def patch_user(user_id: str, updated_user: UpdateUser):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
     update_data = {k: v for k, v in updated_user.dict().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields provided for update")
@@ -65,6 +74,9 @@ async def patch_user(user_id: str, updated_user: UpdateUser):
 
 @router.delete("/{user_id}", summary="Delete user by ID")
 async def delete_user(user_id: str):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
     result = await users_collection.delete_one({"_id": ObjectId(user_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
