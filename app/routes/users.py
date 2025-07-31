@@ -1,13 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from app.database import db
 from app.helpers.user_helper import serialize_user
 from app.models.user_model import User, UpdateUser
+from app.middlewares.validate_email import validate_email
 
 router = APIRouter()
 users_collection = db["users"]
 
-@router.post("/", summary="Create a new user")
+@router.post("/", summary="Create a new user", dependencies=[Depends(validate_email)])
 async def create_user(user: User):
     existing = await users_collection.find_one({"email": user.email})
     if existing:
@@ -39,7 +40,7 @@ async def get_user_by_email(email: str):
         raise HTTPException(status_code=404, detail="User not found")
     return serialize_user(user)
 
-@router.put("/{user_id}", summary="Update user by ID")
+@router.put("/{user_id}", summary="Update user by ID", dependencies=[Depends(validate_email)])
 async def update_user(user_id: str, updated_user: User):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
@@ -54,7 +55,7 @@ async def update_user(user_id: str, updated_user: User):
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     return serialize_user(user)
 
-@router.patch("/{user_id}", summary="Update user partially by ID")
+@router.patch("/{user_id}", summary="Update user partially by ID", dependencies=[Depends(validate_email)])
 async def patch_user(user_id: str, updated_user: UpdateUser):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")

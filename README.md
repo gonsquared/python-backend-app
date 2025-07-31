@@ -13,6 +13,10 @@ docker-compose up --build -d
 
 docker exec -it python-backend-app python seeders/users_seeder.py
 
+## Running the tasks seeder:
+
+docker exec -it python-backend-app python seeders/tasks_seeder.py
+
 ## Stoping the application:
 
 docker-compose down
