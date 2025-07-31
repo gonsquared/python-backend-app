@@ -1,7 +1,12 @@
-# initial data
-users_db = [
-    {"id": 1, "name": "Alice", "email": "alice@example.com"},
-    {"id": 2, "name": "Bob", "email": "bob@example.com"},
-]
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
-# to do: use mongodb 
+class User(BaseModel):
+    name: str
+    email: EmailStr
+    age: Optional[int] = None
+
+class UpdateUser(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    age: Optional[int] = None
