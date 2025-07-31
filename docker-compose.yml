@@ -3,20 +3,20 @@ version: "3.9"
 services:
   backend:
     build: .
-    container_name: fastapi-backend
+    container_name: python-backend-app
     ports:
       - "8000:8000"
     depends_on:
       - mongodb
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URI=mongodb://mongodb:27017
       - DB_NAME=backendapp
     volumes:
       - .:/app
     restart: always
 
   mongodb:
-    image: mongo:6.0
+    image: mongo:latest
     container_name: mongo-db
     restart: always
     ports:

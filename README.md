@@ -7,11 +7,11 @@
 
 ## Running the application:
 
-docker-compose up --build
+docker-compose up --build -d
 
 ## Running the users seeder:
 
-docker exec -it fastapi-backend python users_seeder.py
+docker exec -it python-backend-app python seeders/users_seeder.py
 
 ## Stoping the application:
 
