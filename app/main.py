@@ -19,7 +19,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Python Users API"}
+    return {"message": "backend app is running."}
 
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
