@@ -4,3 +4,5 @@ motor
 pydantic
 pydantic[email]
 python-dotenv
+pytest
+pytest-asyncio

@@ -8,13 +8,18 @@ from app.middlewares.validate_email import validate_email
 router = APIRouter()
 users_collection = db["users"]
 
+def model_to_dict(model):
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
 @router.post("/", summary="Create a new user", dependencies=[Depends(validate_email)])
 async def create_user(user: User):
     existing = await users_collection.find_one({"email": user.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    user_dict = user.dict()
+    user_dict = model_to_dict(user)
     result = await users_collection.insert_one(user_dict)
     return {"id": str(result.inserted_id), **user_dict}
 
@@ -45,7 +50,7 @@ async def update_user(user_id: str, updated_user: User):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
-    update_data = updated_user.dict()
+    update_data = model_to_dict(updated_user)
     result = await users_collection.update_one(
         {"_id": ObjectId(user_id)}, {"$set": update_data}
     )
@@ -60,7 +65,7 @@ async def patch_user(user_id: str, updated_user: UpdateUser):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
-    update_data = {k: v for k, v in updated_user.dict().items() if v is not None}
+    update_data = {k: v for k, v in model_to_dict(updated_user).items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields provided for update")
 

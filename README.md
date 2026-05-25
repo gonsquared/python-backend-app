@@ -12,11 +12,10 @@ A REST API backend built with FastAPI and MongoDB, containerized with Docker.
 │   ├── helpers/            # Serialization utilities
 │   ├── middlewares/        # Request middleware (email validation)
 │   ├── models/             # Pydantic models for request/response
-│   └── routes/             # Route handlers for users and tasks
+│   └── routes/             # Route handlers for users
 ├── seeders/
 │   ├── seed.py             # Runs all seeders
-│   ├── users_seeder.py     # Seeds user data
-│   └── tasks_seeder.py     # Seeds task data
+│   └── users_seeder.py     # Seeds user data
 ├── .env_dev                # Development environment variables
 ├── docker-compose.yml
 ├── Dockerfile
@@ -71,6 +70,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 4000 --reload
 
 Requires a running MongoDB instance. Set `MONGO_URI` in a `.env` file.
 
+## Running Tests
+
+```bash
+pytest
+```
+
 ## Docker Setup
 
 | Command                        | Description                         |
@@ -87,14 +92,11 @@ Docker Compose services:
 ## Database Seeding
 
 ```bash
-# Run all seeders (users + tasks)
+# Run all seeders
 docker exec -it python-backend-app python seeders/seed.py
 
 # Seed only users
 docker exec -it python-backend-app python seeders/users_seeder.py
-
-# Seed only tasks
-docker exec -it python-backend-app python seeders/tasks_seeder.py
 ```
 
 ## API Reference
@@ -119,20 +121,7 @@ Base URL: `http://localhost:4000`
 | PATCH  | `/{user_id}`          | Partial update of a user |
 | DELETE | `/{user_id}`          | Delete a user            |
 
-User schema: `name` (2–100 chars), `email` (valid email), `age` (0–120, optional).
-
-### Tasks — `/api/tasks`
-
-| Method | Endpoint              | Description               |
-| ------ | --------------------- | ------------------------- |
-| POST   | `/`                   | Create a task             |
-| GET    | `/`                   | List all tasks            |
-| GET    | `/{task_id}`          | Get task by ID            |
-| GET    | `/user/{user_id}`     | Get all tasks for a user  |
-| PUT    | `/{task_id}`          | Update a task             |
-| DELETE | `/{task_id}`          | Delete a task             |
-
-Task schema: `user` (user ObjectId), `label` (string), `status` (`pending` | `on-going` | `done`).
+User schema: `firstName` (2–100 chars), `lastName` (2–100 chars), `email` (valid email).
 
 ## Interactive API Docs
 
