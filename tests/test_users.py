@@ -5,6 +5,7 @@ from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from app.main import origins
 from app.models.user_model import UpdateUser, User
 from app.routes import users as users_route
 
@@ -93,6 +94,11 @@ def test_user_model_requires_first_name_last_name_and_email():
 def test_user_model_rejects_missing_last_name():
     with pytest.raises(ValidationError):
         User(firstName="Jane", email="jane@example.com")
+
+
+def test_cors_allows_docker_frontend_origin():
+    assert "http://localhost:8081" in origins
+    assert "http://127.0.0.1:8081" in origins
 
 
 @pytest.mark.asyncio
