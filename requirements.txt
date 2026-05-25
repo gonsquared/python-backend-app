@@ -6,3 +6,4 @@ pydantic[email]
 python-dotenv
 pytest
 pytest-asyncio
+pre-commit

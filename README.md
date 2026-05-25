@@ -76,6 +76,15 @@ Requires a running MongoDB instance. Set `MONGO_URI` in a `.env` file.
 pytest
 ```
 
+## Pre-Commit Checks
+
+```bash
+.venv/bin/pre-commit install
+.venv/bin/pre-commit run --all-files
+```
+
+The pre-commit hook runs `.venv/bin/python -m pytest` and `.venv/bin/python -m compileall app seeders tests`.
+
 ## Docker Setup
 
 | Command                        | Description                         |
