@@ -48,6 +48,14 @@ The app reads from `.env` at runtime. The `Dockerfile` copies `.env_dev` to `.en
 | `MONGO_URI` | MongoDB connection string | `mongodb://mongodb:27017`   |
 | `DB_NAME`   | MongoDB database name    | `backendapp`                 |
 
+For local development without running the backend in Docker, use a local `.env`
+file like this:
+
+```bash
+MONGO_URI=mongodb://localhost:27018
+DB_NAME=backendapp
+```
+
 ## Getting Started
 
 ```bash
@@ -64,16 +72,30 @@ The API will be available at `http://localhost:4000`.
 ## Running Locally (without Docker)
 
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 4000 --reload
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 4000 --reload
 ```
 
 Requires a running MongoDB instance. Set `MONGO_URI` in a `.env` file.
+If you want Docker to run only MongoDB while FastAPI runs locally, start MongoDB
+with:
+
+```bash
+docker compose up -d mongodb
+```
+
+This project maps MongoDB to `localhost:27018` to avoid conflicts with other
+local MongoDB containers using `27017`.
+
+On newer Debian/Ubuntu Python installs, running `pip install -r requirements.txt`
+directly may fail with `externally-managed-environment`. Use the project virtual
+environment commands above instead of installing packages into system Python.
 
 ## Running Tests
 
 ```bash
-pytest
+.venv/bin/pytest
 ```
 
 ## Pre-Commit Checks
@@ -96,7 +118,7 @@ The pre-commit hook runs `.venv/bin/python -m pytest` and `.venv/bin/python -m c
 Docker Compose services:
 
 - **backend** — FastAPI app on port `4000`
-- **mongodb** — MongoDB on port `27017` with persistent volume `mongo_data`
+- **mongodb** — MongoDB on host port `27018` with persistent volume `mongo_data`
 
 ## Database Seeding
 

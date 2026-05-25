@@ -21,6 +21,7 @@ class FakeUsersCollection:
     def __init__(self, documents=None):
         self.documents = list(documents or [])
         self.inserted_document = None
+        self.inserted_payload = None
         self.updated_filter = None
         self.updated_data = None
         self.deleted_filter = None
@@ -54,7 +55,9 @@ class FakeUsersCollection:
         return FakeCursor(self.documents)
 
     async def insert_one(self, document):
+        self.inserted_payload = document.copy()
         self.inserted_document = document
+        document["_id"] = ObjectId("64f1f77bcf86cd7994390111")
         return SimpleNamespace(inserted_id=ObjectId("64f1f77bcf86cd7994390111"))
 
     async def update_one(self, query, update):
@@ -150,7 +153,7 @@ async def test_create_user_inserts_new_user():
         )
     )
 
-    assert collection.inserted_document == {
+    assert collection.inserted_payload == {
         "firstName": "Jane",
         "lastName": "Doe",
         "email": "jane@example.com",
@@ -158,6 +161,7 @@ async def test_create_user_inserts_new_user():
     assert result["firstName"] == "Jane"
     assert result["lastName"] == "Doe"
     assert result["email"] == "jane@example.com"
+    assert "_id" not in result
 
 
 @pytest.mark.asyncio

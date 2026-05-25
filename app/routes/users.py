@@ -10,7 +10,7 @@ users_collection = db["users"]
 
 def model_to_dict(model):
     if hasattr(model, "model_dump"):
-        return model.model_dump()
+        return model.model_dump(mode="json")
     return model.dict()
 
 @router.post("/", summary="Create a new user", dependencies=[Depends(validate_email)])
@@ -20,7 +20,7 @@ async def create_user(user: User):
         raise HTTPException(status_code=400, detail="Email already exists")
 
     user_dict = model_to_dict(user)
-    result = await users_collection.insert_one(user_dict)
+    result = await users_collection.insert_one(user_dict.copy())
     return {"id": str(result.inserted_id), **user_dict}
 
 @router.get("/", summary="Get all users")
