@@ -152,7 +152,22 @@ Base URL: `http://localhost:4000`
 | PATCH  | `/{user_id}`          | Partial update of a user |
 | DELETE | `/{user_id}`          | Delete a user            |
 
-User schema: `firstName` (2–100 chars), `lastName` (2–100 chars), `email` (valid email).
+User schema: `firstName` (2–100 chars), `lastName` (2–100 chars), `email` (valid email), optional `password` (12–128 chars).
+
+Password values are hashed with Argon2id before storage. API responses do not include password or password hash data.
+
+### Auth — `/api/auth`
+
+| Method | Endpoint    | Description                              |
+| ------ | ----------- | ---------------------------------------- |
+| POST   | `/register` | Register a user and store a password hash |
+| POST   | `/login`    | Verify credentials and return a bearer token |
+
+Registration body: `firstName`, `lastName`, `email`, `password`, `verifyPassword`.
+
+Login body: `email`, `password`.
+
+Login response includes `accessToken`, `tokenType`, `expiresIn`, and `user`.
 
 ## Interactive API Docs
 

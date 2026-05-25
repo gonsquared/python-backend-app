@@ -8,9 +8,8 @@ services:
       - "4000:4000"
     depends_on:
       - mongodb
-    environment:
-      - MONGO_URI=mongodb://mongodb:27017
-      - DB_NAME=backendapp
+    env_file:
+      - .env_dev
     volumes:
       - .:/app
     restart: always

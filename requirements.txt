@@ -7,3 +7,5 @@ python-dotenv
 pytest
 pytest-asyncio
 pre-commit
+argon2-cffi
+PyJWT

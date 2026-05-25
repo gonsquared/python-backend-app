@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.main import origins
 from app.models.user_model import UpdateUser, User
 from app.routes import users as users_route
+from app.security import verify_password
 
 
 class FakeCursor:
@@ -168,6 +169,30 @@ async def test_create_user_inserts_new_user():
     assert result["lastName"] == "Doe"
     assert result["email"] == "jane@example.com"
     assert "_id" not in result
+
+
+@pytest.mark.asyncio
+async def test_create_user_hashes_password_and_does_not_return_password_data():
+    collection = FakeUsersCollection()
+    users_route.users_collection = collection
+
+    result = await users_route.create_user(
+        User(
+            firstName="Jane",
+            lastName="Doe",
+            email="jane@example.com",
+            password="VeryStrongPassword123!",
+        )
+    )
+
+    assert collection.inserted_payload["passwordHash"] != "VeryStrongPassword123!"
+    assert collection.inserted_payload["passwordHash"].startswith("$argon2")
+    assert verify_password(
+        "VeryStrongPassword123!",
+        collection.inserted_payload["passwordHash"],
+    )
+    assert "password" not in result
+    assert "passwordHash" not in result
 
 
 @pytest.mark.asyncio

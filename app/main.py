@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes import auth
 from app.routes import users
 
 app = FastAPI()
@@ -24,3 +25,4 @@ async def root():
     return {"message": "backend app is running."}
 
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
