@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.database import db
 from app.helpers.email_helper import send_activation_email
-from app.helpers.user_helper import serialize_user
+from app.helpers.user_helper import get_user_status, serialize_user
 from app.models.user_model import LoginUser, RegisterUser
 from app.security import (
     create_access_token,
@@ -42,7 +42,7 @@ async def register(user: RegisterUser):
     password = user_dict.pop("password")
     user_dict.pop("verifyPassword")
     user_dict["passwordHash"] = hash_password(password)
-    user_dict["isEmailActivated"] = False
+    user_dict["status"] = "inactive"
 
     result = await users_collection.insert_one(user_dict.copy())
     created_user = {"_id": result.inserted_id, **user_dict}
@@ -66,7 +66,7 @@ async def login(credentials: LoginUser):
             detail="Invalid email or password",
         )
 
-    if not user.get("isEmailActivated", False):
+    if get_user_status(user) != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email address needs to be activated before login",
@@ -88,7 +88,7 @@ async def activate_account(token: str):
         raise HTTPException(status_code=400, detail="Invalid or expired activation link")
 
     result = await users_collection.update_one(
-        {"_id": ObjectId(user_id)}, {"$set": {"isEmailActivated": True}}
+        {"_id": ObjectId(user_id)}, {"$set": {"status": "active"}}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")

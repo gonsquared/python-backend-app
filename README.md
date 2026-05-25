@@ -170,7 +170,7 @@ Login body: `email`, `password`.
 
 Login response includes `accessToken`, `tokenType`, `expiresIn`, and `user`.
 
-New registrations are created with `isEmailActivated: false`. The API sends an activation email containing a frontend link like `/activate-account?token=...`. Login returns `403` until the email address is activated.
+New registrations are created with `status: "inactive"`. The API sends an activation email containing a frontend link like `/activate-account?token=...`; opening it changes the user status to `active`. Login returns `403` until the user status is `active`. The supported user statuses are `inactive`, `active`, and `archived`.
 
 In Docker development, activation emails are captured by MailHog:
 

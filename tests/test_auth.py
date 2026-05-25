@@ -92,8 +92,8 @@ async def test_register_hashes_password_sends_activation_email_and_returns_safe_
     assert "password" not in result["user"]
     assert "passwordHash" not in result["user"]
     assert result["user"]["email"] == "jane@example.com"
-    assert result["user"]["isEmailActivated"] is False
-    assert collection.inserted_payload["isEmailActivated"] is False
+    assert result["user"]["status"] == "inactive"
+    assert collection.inserted_payload["status"] == "inactive"
     assert sent_messages[0]["email"] == "jane@example.com"
     assert "http://localhost:5173/activate-account?token=" in sent_messages[0]["link"]
     assert result["message"] == "Registration successful. Please check your email to activate your account."
@@ -128,7 +128,7 @@ async def test_login_returns_access_token_for_valid_credentials():
                 "firstName": "Jane",
                 "lastName": "Doe",
                 "email": "jane@example.com",
-                "isEmailActivated": True,
+                "status": "active",
                 "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
             }
         ]
@@ -154,7 +154,7 @@ async def test_login_rejects_inactive_email():
                 "firstName": "Jane",
                 "lastName": "Doe",
                 "email": "jane@example.com",
-                "isEmailActivated": False,
+                "status": "inactive",
                 "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
             }
         ]
@@ -183,7 +183,30 @@ async def test_login_rejects_invalid_credentials():
 
 
 @pytest.mark.asyncio
-async def test_activate_account_marks_email_as_activated():
+async def test_login_allows_legacy_activated_user():
+    user_id = ObjectId("64f1f77bcf86cd7994390111")
+    auth_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": user_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "isEmailActivated": True,
+                "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
+            }
+        ]
+    )
+
+    result = await auth_route.login(
+        LoginUser(email="jane@example.com", password="VeryStrongPassword123!")
+    )
+
+    assert result["user"]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_activate_account_marks_user_as_active():
     user_id = ObjectId("64f1f77bcf86cd7994390111")
     collection = FakeUsersCollection(
         [
@@ -192,7 +215,7 @@ async def test_activate_account_marks_email_as_activated():
                 "firstName": "Jane",
                 "lastName": "Doe",
                 "email": "jane@example.com",
-                "isEmailActivated": False,
+                "status": "inactive",
                 "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
             }
         ]
@@ -203,6 +226,6 @@ async def test_activate_account_marks_email_as_activated():
     result = await auth_route.activate_account(token)
 
     assert collection.updated_filter == {"_id": user_id}
-    assert collection.updated_data == {"$set": {"isEmailActivated": True}}
-    assert collection.documents[0]["isEmailActivated"] is True
+    assert collection.updated_data == {"$set": {"status": "active"}}
+    assert collection.documents[0]["status"] == "active"
     assert result == {"message": "Email address activated successfully"}

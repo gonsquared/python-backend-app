@@ -14,6 +14,12 @@ def model_to_dict(model):
         return model.model_dump(mode="json")
     return model.dict()
 
+def model_field_was_set(model, field_name: str) -> bool:
+    fields_set = getattr(model, "model_fields_set", None)
+    if fields_set is None:
+        fields_set = getattr(model, "__fields_set__", set())
+    return field_name in fields_set
+
 async def ensure_email_is_unique(email: str, user_id: str | None = None):
     existing = await users_collection.find_one({"email": email})
     if not existing:
@@ -64,6 +70,9 @@ async def update_user(user_id: str, updated_user: User):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
     update_data = model_to_dict(updated_user)
+    if not model_field_was_set(updated_user, "status"):
+        update_data.pop("status", None)
+
     password = update_data.pop("password", None)
     if password:
         update_data["passwordHash"] = hash_password(password)

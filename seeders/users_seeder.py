@@ -10,10 +10,10 @@ DB_NAME = os.getenv("DB_NAME", "backendapp")
 COLLECTION_NAME = "users"
 
 sample_users = [
-    {"firstName": "Alice", "lastName": "Johnson", "email": "alice@example.com"},
-    {"firstName": "Bob", "lastName": "Smith", "email": "bob@example.com"},
-    {"firstName": "Charlie", "lastName": "Brown", "email": "charlie@example.com"},
-    {"firstName": "Dexter", "lastName": "Morgan", "email": "dexter@example.com"},
+    {"firstName": "Alice", "lastName": "Johnson", "email": "alice@example.com", "status": "active"},
+    {"firstName": "Bob", "lastName": "Smith", "email": "bob@example.com", "status": "active"},
+    {"firstName": "Charlie", "lastName": "Brown", "email": "charlie@example.com", "status": "inactive"},
+    {"firstName": "Dexter", "lastName": "Morgan", "email": "dexter@example.com", "status": "archived"},
 ]
 
 async def seed_users():

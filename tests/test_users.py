@@ -89,6 +89,7 @@ def test_user_model_requires_first_name_last_name_and_email():
     assert user.firstName == "Jane"
     assert user.lastName == "Doe"
     assert user.email == "jane@example.com"
+    assert user.status == "inactive"
     assert not hasattr(user, "age")
 
 
@@ -112,6 +113,7 @@ async def test_get_users_returns_serialized_users():
                 "firstName": "Jane",
                 "lastName": "Doe",
                 "email": "jane@example.com",
+                "status": "active",
             }
         ]
     )
@@ -124,6 +126,7 @@ async def test_get_users_returns_serialized_users():
             "firstName": "Jane",
             "lastName": "Doe",
             "email": "jane@example.com",
+            "status": "active",
         }
     ]
 
@@ -164,10 +167,12 @@ async def test_create_user_inserts_new_user():
         "firstName": "Jane",
         "lastName": "Doe",
         "email": "jane@example.com",
+        "status": "inactive",
     }
     assert result["firstName"] == "Jane"
     assert result["lastName"] == "Doe"
     assert result["email"] == "jane@example.com"
+    assert result["status"] == "inactive"
     assert "_id" not in result
 
 
@@ -251,6 +256,35 @@ async def test_update_user_allows_existing_email_for_same_user():
 
     assert collection.updated_filter == {"_id": object_id}
     assert result["email"] == "jane@example.com"
+
+
+@pytest.mark.asyncio
+async def test_update_user_does_not_reset_status_when_status_is_omitted():
+    user_id = "64f1f77bcf86cd7994390111"
+    object_id = ObjectId(user_id)
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": object_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "status": "active",
+            }
+        ]
+    )
+    users_route.users_collection = collection
+
+    await users_route.update_user(
+        user_id,
+        User(
+            firstName="Jane",
+            lastName="Updated",
+            email="jane@example.com",
+        ),
+    )
+
+    assert "status" not in collection.updated_data["$set"]
 
 
 @pytest.mark.asyncio
