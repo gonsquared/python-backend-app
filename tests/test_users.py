@@ -171,6 +171,114 @@ async def test_create_user_inserts_new_user():
 
 
 @pytest.mark.asyncio
+async def test_update_user_rejects_email_used_by_another_user():
+    user_id = "64f1f77bcf86cd7994390111"
+    other_user_id = ObjectId("64f1f77bcf86cd7994390112")
+    users_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": other_user_id,
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "email": "ada@example.com",
+            }
+        ]
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await users_route.update_user(
+            user_id,
+            User(
+                firstName="Jane",
+                lastName="Doe",
+                email="ada@example.com",
+            ),
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Email already exists"
+
+
+@pytest.mark.asyncio
+async def test_update_user_allows_existing_email_for_same_user():
+    user_id = "64f1f77bcf86cd7994390111"
+    object_id = ObjectId(user_id)
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": object_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+            }
+        ]
+    )
+    users_route.users_collection = collection
+
+    result = await users_route.update_user(
+        user_id,
+        User(
+            firstName="Jane",
+            lastName="Updated",
+            email="jane@example.com",
+        ),
+    )
+
+    assert collection.updated_filter == {"_id": object_id}
+    assert result["email"] == "jane@example.com"
+
+
+@pytest.mark.asyncio
+async def test_patch_user_rejects_email_used_by_another_user():
+    user_id = "64f1f77bcf86cd7994390111"
+    other_user_id = ObjectId("64f1f77bcf86cd7994390112")
+    users_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": other_user_id,
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "email": "ada@example.com",
+            }
+        ]
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await users_route.patch_user(
+            user_id,
+            UpdateUser(email="ada@example.com"),
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Email already exists"
+
+
+@pytest.mark.asyncio
+async def test_patch_user_allows_existing_email_for_same_user():
+    user_id = "64f1f77bcf86cd7994390111"
+    object_id = ObjectId(user_id)
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": object_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+            }
+        ]
+    )
+    users_route.users_collection = collection
+
+    result = await users_route.patch_user(
+        user_id,
+        UpdateUser(email="jane@example.com"),
+    )
+
+    assert collection.updated_filter == {"_id": object_id}
+    assert result["email"] == "jane@example.com"
+
+
+@pytest.mark.asyncio
 async def test_patch_user_rejects_empty_update():
     users_route.users_collection = FakeUsersCollection()
 
