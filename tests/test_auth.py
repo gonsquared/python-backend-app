@@ -13,6 +13,9 @@ class FakeUsersCollection:
     def __init__(self, documents=None):
         self.documents = list(documents or [])
         self.inserted_payload = None
+        self.updated_filter = None
+        self.updated_data = None
+        self.matched_count = 1
 
     async def find_one(self, query):
         if "email" in query:
@@ -25,6 +28,16 @@ class FakeUsersCollection:
                 None,
             )
 
+        if "_id" in query:
+            return next(
+                (
+                    document
+                    for document in self.documents
+                    if document.get("_id") == query["_id"]
+                ),
+                None,
+            )
+
         return None
 
     async def insert_one(self, document):
@@ -32,6 +45,14 @@ class FakeUsersCollection:
         document["_id"] = ObjectId("64f1f77bcf86cd7994390111")
         self.documents.append(document)
         return SimpleNamespace(inserted_id=ObjectId("64f1f77bcf86cd7994390111"))
+
+    async def update_one(self, query, update):
+        self.updated_filter = query
+        self.updated_data = update
+        for document in self.documents:
+            if document.get("_id") == query.get("_id"):
+                document.update(update.get("$set", {}))
+        return SimpleNamespace(matched_count=self.matched_count)
 
 
 @pytest.fixture(autouse=True)
@@ -42,9 +63,15 @@ def restore_users_collection():
 
 
 @pytest.mark.asyncio
-async def test_register_hashes_password_and_returns_user_without_password_data():
+async def test_register_hashes_password_sends_activation_email_and_returns_safe_user(monkeypatch):
     collection = FakeUsersCollection()
     auth_route.users_collection = collection
+    sent_messages = []
+    monkeypatch.setattr(
+        auth_route,
+        "send_activation_email",
+        lambda email, link: sent_messages.append({"email": email, "link": link}),
+    )
 
     result = await auth_route.register(
         RegisterUser(
@@ -65,6 +92,11 @@ async def test_register_hashes_password_and_returns_user_without_password_data()
     assert "password" not in result["user"]
     assert "passwordHash" not in result["user"]
     assert result["user"]["email"] == "jane@example.com"
+    assert result["user"]["isEmailActivated"] is False
+    assert collection.inserted_payload["isEmailActivated"] is False
+    assert sent_messages[0]["email"] == "jane@example.com"
+    assert "http://localhost:5173/activate-account?token=" in sent_messages[0]["link"]
+    assert result["message"] == "Registration successful. Please check your email to activate your account."
 
 
 @pytest.mark.asyncio
@@ -96,6 +128,7 @@ async def test_login_returns_access_token_for_valid_credentials():
                 "firstName": "Jane",
                 "lastName": "Doe",
                 "email": "jane@example.com",
+                "isEmailActivated": True,
                 "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
             }
         ]
@@ -112,6 +145,31 @@ async def test_login_returns_access_token_for_valid_credentials():
 
 
 @pytest.mark.asyncio
+async def test_login_rejects_inactive_email():
+    user_id = ObjectId("64f1f77bcf86cd7994390111")
+    auth_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": user_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "isEmailActivated": False,
+                "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
+            }
+        ]
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await auth_route.login(
+            LoginUser(email="jane@example.com", password="VeryStrongPassword123!")
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Email address needs to be activated before login"
+
+
+@pytest.mark.asyncio
 async def test_login_rejects_invalid_credentials():
     auth_route.users_collection = FakeUsersCollection()
 
@@ -122,3 +180,29 @@ async def test_login_rejects_invalid_credentials():
 
     assert error.value.status_code == 401
     assert error.value.detail == "Invalid email or password"
+
+
+@pytest.mark.asyncio
+async def test_activate_account_marks_email_as_activated():
+    user_id = ObjectId("64f1f77bcf86cd7994390111")
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": user_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "isEmailActivated": False,
+                "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
+            }
+        ]
+    )
+    auth_route.users_collection = collection
+    token = auth_route.create_email_activation_token(str(user_id))
+
+    result = await auth_route.activate_account(token)
+
+    assert collection.updated_filter == {"_id": user_id}
+    assert collection.updated_data == {"$set": {"isEmailActivated": True}}
+    assert collection.documents[0]["isEmailActivated"] is True
+    assert result == {"message": "Email address activated successfully"}

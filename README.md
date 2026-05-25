@@ -162,12 +162,20 @@ Password values are hashed with Argon2id before storage. API responses do not in
 | ------ | ----------- | ---------------------------------------- |
 | POST   | `/register` | Register a user and store a password hash |
 | POST   | `/login`    | Verify credentials and return a bearer token |
+| GET    | `/activate` | Activate a registered email address       |
 
 Registration body: `firstName`, `lastName`, `email`, `password`, `verifyPassword`.
 
 Login body: `email`, `password`.
 
 Login response includes `accessToken`, `tokenType`, `expiresIn`, and `user`.
+
+New registrations are created with `isEmailActivated: false`. The API sends an activation email containing a frontend link like `/activate-account?token=...`. Login returns `403` until the email address is activated.
+
+In Docker development, activation emails are captured by MailHog:
+
+- MailHog UI: `http://localhost:8025`
+- SMTP service: `mailhog:1025`
 
 ## Interactive API Docs
 

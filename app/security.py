@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from jwt import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 
@@ -12,6 +13,9 @@ JWT_SECRET_KEY = os.getenv(
 )
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+EMAIL_ACTIVATION_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("EMAIL_ACTIVATION_TOKEN_EXPIRE_MINUTES", "1440")
+)
 
 password_hasher = PasswordHasher(
     time_cost=3,
@@ -43,3 +47,29 @@ def create_access_token(subject: str) -> tuple[str, int]:
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token, int(expires_delta.total_seconds())
+
+
+def create_email_activation_token(subject: str) -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=EMAIL_ACTIVATION_TOKEN_EXPIRE_MINUTES
+    )
+    payload = {
+        "sub": subject,
+        "purpose": "email_activation",
+        "exp": expires_at,
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def verify_email_activation_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except InvalidTokenError:
+        return None
+
+    if payload.get("purpose") != "email_activation":
+        return None
+
+    subject = payload.get("sub")
+    return subject if isinstance(subject, str) else None

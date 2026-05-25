@@ -98,8 +98,8 @@ def test_user_model_rejects_missing_last_name():
 
 
 def test_cors_allows_docker_frontend_origin():
-    assert "http://localhost:8081" in origins
-    assert "http://127.0.0.1:8081" in origins
+    assert "http://localhost:5173" in origins
+    assert "http://127.0.0.1:5173" in origins
 
 
 @pytest.mark.asyncio
