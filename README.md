@@ -162,6 +162,19 @@ User schema: `firstName` (2–100 chars), `lastName` (2–100 chars), `email` (v
 
 Password values are hashed with Argon2id before storage. API responses do not include password or password hash data.
 
+### Notes — `/api/notes`
+
+| Method | Endpoint     | Description           |
+| ------ | ------------ | --------------------- |
+| POST   | `/`          | Create a note         |
+| GET    | `/`          | List accessible notes |
+| GET    | `/by-user/{user_id}` | List notes by user |
+| GET    | `/{note_id}` | Get note by ID        |
+| PUT    | `/{note_id}` | Update a note         |
+| DELETE | `/{note_id}` | Delete a note         |
+
+Note schema: `title`, `contents`, and `status` (`published`, `not published`, or `archived`). The API sets `user`, `createdAt`, and `updatedAt`.
+
 ### Auth — `/api/auth`
 
 | Method | Endpoint    | Description                              |
