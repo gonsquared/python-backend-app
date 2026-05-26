@@ -1,7 +1,14 @@
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 from app.security import hash_password
 
 load_dotenv()
@@ -17,19 +24,32 @@ sample_users = [
     {"firstName": "Dexter", "lastName": "Morgan", "email": "dexter@example.com", "status": "archived", "role": "user"},
 ]
 
+def get_required_admin_config(name: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+
+    dotenv_value = dotenv_values().get(name)
+    if dotenv_value:
+        return dotenv_value
+
+    raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured")
+
 async def seed_users():
-    admin_email = os.getenv("ADMIN_EMAIL")
-    admin_password = os.getenv("ADMIN_PASSWORD")
-    if not admin_email or not admin_password:
-        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured")
+    admin_email = get_required_admin_config("ADMIN_EMAIL")
+    admin_password = get_required_admin_config("ADMIN_PASSWORD")
 
     client = AsyncIOMotorClient(MONGO_URI)
     db = client[DB_NAME]
     users_collection = db[COLLECTION_NAME]
 
-    await users_collection.delete_many({})
-    result = await users_collection.insert_many(sample_users)
-    print(f"Inserted {len(result.inserted_ids)} users into '{COLLECTION_NAME}' collection.")
+    for user in sample_users:
+        await users_collection.update_one(
+            {"email": user["email"]},
+            {"$setOnInsert": user},
+            upsert=True,
+        )
+    print(f"Seeded {len(sample_users)} sample users if missing.")
 
     await users_collection.update_one(
         {"email": admin_email},

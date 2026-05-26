@@ -56,8 +56,8 @@ file like this:
 ```bash
 MONGO_URI=mongodb://localhost:27018
 DB_NAME=backendapp
-ADMIN_EMAIL=gonsquared@gmail.com
-ADMIN_PASSWORD=L3tmein1234567890!
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
 ```
 
 ## Getting Started
@@ -125,6 +125,8 @@ Docker Compose services:
 - **mongodb** — MongoDB on host port `27018` with persistent volume `mongo_data`
 
 ## Database Seeding
+
+User seeding is non-destructive: sample users are created only when their email does not already exist. The configured admin user is the exception; running the seeder updates that account so it always has the configured admin credentials and permissions.
 
 ```bash
 # Run all seeders
