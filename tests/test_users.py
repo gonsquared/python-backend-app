@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.main import origins
 from app.models.user_model import UpdateUser, User
+from app.models.user_model import UpdateAvatar
 from app.routes import users as users_route
 from app.security import verify_password
 
@@ -103,6 +104,17 @@ def test_user_model_requires_first_name_last_name_and_email():
     assert not hasattr(user, "age")
 
 
+def test_update_avatar_accepts_image_data_url():
+    avatar = UpdateAvatar(avatarUrl="data:image/png;base64,ZmFrZS1pbWFnZQ==")
+
+    assert avatar.avatarUrl == "data:image/png;base64,ZmFrZS1pbWFnZQ=="
+
+
+def test_update_avatar_rejects_non_image_data_url():
+    with pytest.raises(ValidationError):
+        UpdateAvatar(avatarUrl="data:text/plain;base64,SGVsbG8=")
+
+
 def test_user_model_rejects_missing_last_name():
     with pytest.raises(ValidationError):
         User(firstName="Jane", email="jane@example.com")
@@ -125,6 +137,7 @@ async def test_get_users_returns_serialized_users():
                 "email": "jane@example.com",
                 "status": "active",
                 "role": "admin",
+                "avatarUrl": "data:image/png;base64,ZmFrZS1pbWFnZQ==",
             }
         ]
     )
@@ -147,8 +160,60 @@ async def test_get_users_returns_serialized_users():
                 "manage_notes",
                 "manage_own_notes",
             ],
+            "avatarUrl": "data:image/png;base64,ZmFrZS1pbWFnZQ==",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_user_can_update_their_avatar():
+    user_id = "64f1f77bcf86cd7994390111"
+    object_id = ObjectId(user_id)
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": object_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "status": "active",
+                "role": "user",
+            }
+        ]
+    )
+    users_route.users_collection = collection
+
+    result = await users_route.update_user_avatar(
+        user_id,
+        UpdateAvatar(avatarUrl="data:image/png;base64,ZmFrZS1pbWFnZQ=="),
+        current_user={"_id": object_id, "role": "user", "status": "active"},
+    )
+
+    assert collection.updated_data == {
+        "$set": {"avatarUrl": "data:image/png;base64,ZmFrZS1pbWFnZQ=="}
+    }
+    assert result["avatarUrl"] == "data:image/png;base64,ZmFrZS1pbWFnZQ=="
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_update_another_users_avatar():
+    user_id = "64f1f77bcf86cd7994390111"
+    other_user_id = "64f1f77bcf86cd7994390112"
+    users_route.users_collection = FakeUsersCollection()
+
+    with pytest.raises(HTTPException) as error:
+        await users_route.update_user_avatar(
+            other_user_id,
+            UpdateAvatar(avatarUrl="data:image/png;base64,ZmFrZS1pbWFnZQ=="),
+            current_user={
+                "_id": ObjectId(user_id),
+                "role": "user",
+                "status": "active",
+            },
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "You can only manage your own data"
 
 
 @pytest.mark.asyncio

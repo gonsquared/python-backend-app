@@ -3,7 +3,7 @@ from bson import ObjectId
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.helpers.user_helper import get_user_role, serialize_user
-from app.models.user_model import User, UpdateUser
+from app.models.user_model import User, UpdateAvatar, UpdateUser
 from app.middlewares.validate_email import validate_email
 from app.security import hash_password
 
@@ -151,6 +151,26 @@ async def patch_user(user_id: str, updated_user: UpdateUser, current_user=Depend
 
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     return serialize_user(user)
+
+@router.patch("/{user_id}/avatar", summary="Update user avatar")
+async def update_user_avatar(
+    user_id: str, updated_avatar: UpdateAvatar, current_user=Depends(get_current_user)
+):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    require_manage_own_or_users(user_id, current_user)
+
+    update_data = {"avatarUrl": updated_avatar.avatarUrl}
+    result = await users_collection.update_one(
+        {"_id": ObjectId(user_id)}, {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user = await users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return serialize_user({**user, **update_data})
 
 @router.delete("/{user_id}", summary="Delete user by ID")
 async def delete_user(user_id: str, current_user=Depends(get_current_user)):

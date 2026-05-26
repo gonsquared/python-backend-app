@@ -39,6 +39,9 @@ def serialize_user(user) -> dict:
         "permissions": get_user_permissions(user),
     }
 
+    if user.get("avatarUrl"):
+        serialized_user["avatarUrl"] = user.get("avatarUrl")
+
     if "isEmailActivated" in user:
         serialized_user["isEmailActivated"] = user.get("isEmailActivated")
 
