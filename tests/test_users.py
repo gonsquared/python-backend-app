@@ -53,8 +53,17 @@ class FakeUsersCollection:
 
         return None
 
-    def find(self):
-        return FakeCursor(self.documents)
+    def find(self, query=None):
+        if not query:
+            return FakeCursor(self.documents)
+
+        return FakeCursor(
+            [
+                document
+                for document in self.documents
+                if all(document.get(key) == value for key, value in query.items())
+            ]
+        )
 
     async def insert_one(self, document):
         self.inserted_payload = document.copy()
@@ -90,6 +99,7 @@ def test_user_model_requires_first_name_last_name_and_email():
     assert user.lastName == "Doe"
     assert user.email == "jane@example.com"
     assert user.status == "inactive"
+    assert user.role == "user"
     assert not hasattr(user, "age")
 
 
@@ -114,11 +124,14 @@ async def test_get_users_returns_serialized_users():
                 "lastName": "Doe",
                 "email": "jane@example.com",
                 "status": "active",
+                "role": "admin",
             }
         ]
     )
 
-    result = await users_route.get_users()
+    result = await users_route.get_users(
+        current_user={"_id": user_id, "role": "admin", "status": "active"}
+    )
 
     assert result == [
         {
@@ -127,8 +140,112 @@ async def test_get_users_returns_serialized_users():
             "lastName": "Doe",
             "email": "jane@example.com",
             "status": "active",
+            "role": "admin",
+            "permissions": ["manage_users", "manage_own"],
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_regular_user_only_lists_their_own_user():
+    user_id = ObjectId("64f1f77bcf86cd7994390111")
+    other_user_id = ObjectId("64f1f77bcf86cd7994390112")
+    users_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": user_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "status": "active",
+                "role": "user",
+            },
+            {
+                "_id": other_user_id,
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "email": "ada@example.com",
+                "status": "active",
+                "role": "user",
+            },
+        ]
+    )
+
+    result = await users_route.get_users(
+        current_user={"_id": user_id, "role": "user", "status": "active"}
+    )
+
+    assert [user["id"] for user in result] == [str(user_id)]
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_create_users():
+    user_id = ObjectId("64f1f77bcf86cd7994390111")
+    users_route.users_collection = FakeUsersCollection()
+
+    with pytest.raises(HTTPException) as error:
+        await users_route.create_user(
+            User(firstName="Ada", lastName="Lovelace", email="ada@example.com"),
+            current_user={"_id": user_id, "role": "user", "status": "active"},
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Manage users permission is required"
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_update_another_user():
+    user_id = "64f1f77bcf86cd7994390111"
+    other_user_id = "64f1f77bcf86cd7994390112"
+    users_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": ObjectId(other_user_id),
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "email": "ada@example.com",
+                "status": "active",
+                "role": "user",
+            }
+        ]
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await users_route.patch_user(
+            other_user_id,
+            UpdateUser(firstName="Updated"),
+            current_user={"_id": ObjectId(user_id), "role": "user", "status": "active"},
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "You can only manage your own data"
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_change_their_role_or_status():
+    user_id = "64f1f77bcf86cd7994390111"
+    object_id = ObjectId(user_id)
+    collection = FakeUsersCollection(
+        [
+            {
+                "_id": object_id,
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "email": "jane@example.com",
+                "status": "active",
+                "role": "user",
+            }
+        ]
+    )
+    users_route.users_collection = collection
+
+    await users_route.patch_user(
+        user_id,
+        UpdateUser(firstName="Janet", status="archived", role="admin"),
+        current_user={"_id": object_id, "role": "user", "status": "active"},
+    )
+
+    assert collection.updated_data == {"$set": {"firstName": "Janet"}}
 
 
 @pytest.mark.asyncio
@@ -143,7 +260,12 @@ async def test_create_user_rejects_duplicate_email():
                 firstName="Jane",
                 lastName="Doe",
                 email="jane@example.com",
-            )
+            ),
+            current_user={
+                "_id": ObjectId("64f1f77bcf86cd7994390111"),
+                "role": "admin",
+                "status": "active",
+            },
         )
 
     assert error.value.status_code == 400
@@ -160,7 +282,12 @@ async def test_create_user_inserts_new_user():
             firstName="Jane",
             lastName="Doe",
             email="jane@example.com",
-        )
+        ),
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390111"),
+            "role": "admin",
+            "status": "active",
+        },
     )
 
     assert collection.inserted_payload == {
@@ -168,6 +295,8 @@ async def test_create_user_inserts_new_user():
         "lastName": "Doe",
         "email": "jane@example.com",
         "status": "inactive",
+        "role": "user",
+        "createdBy": "64f1f77bcf86cd7994390111",
     }
     assert result["firstName"] == "Jane"
     assert result["lastName"] == "Doe"
@@ -187,7 +316,12 @@ async def test_create_user_hashes_password_and_does_not_return_password_data():
             lastName="Doe",
             email="jane@example.com",
             password="VeryStrongPassword123!",
-        )
+        ),
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390111"),
+            "role": "admin",
+            "status": "active",
+        },
     )
 
     assert collection.inserted_payload["passwordHash"] != "VeryStrongPassword123!"
@@ -223,6 +357,11 @@ async def test_update_user_rejects_email_used_by_another_user():
                 lastName="Doe",
                 email="ada@example.com",
             ),
+            current_user={
+                "_id": ObjectId("64f1f77bcf86cd7994390113"),
+                "role": "admin",
+                "status": "active",
+            },
         )
 
     assert error.value.status_code == 400
@@ -252,6 +391,11 @@ async def test_update_user_allows_existing_email_for_same_user():
             lastName="Updated",
             email="jane@example.com",
         ),
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390113"),
+            "role": "admin",
+            "status": "active",
+        },
     )
 
     assert collection.updated_filter == {"_id": object_id}
@@ -282,6 +426,11 @@ async def test_update_user_does_not_reset_status_when_status_is_omitted():
             lastName="Updated",
             email="jane@example.com",
         ),
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390113"),
+            "role": "admin",
+            "status": "active",
+        },
     )
 
     assert "status" not in collection.updated_data["$set"]
@@ -306,6 +455,11 @@ async def test_patch_user_rejects_email_used_by_another_user():
         await users_route.patch_user(
             user_id,
             UpdateUser(email="ada@example.com"),
+            current_user={
+                "_id": ObjectId("64f1f77bcf86cd7994390113"),
+                "role": "admin",
+                "status": "active",
+            },
         )
 
     assert error.value.status_code == 400
@@ -331,6 +485,11 @@ async def test_patch_user_allows_existing_email_for_same_user():
     result = await users_route.patch_user(
         user_id,
         UpdateUser(email="jane@example.com"),
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390113"),
+            "role": "admin",
+            "status": "active",
+        },
     )
 
     assert collection.updated_filter == {"_id": object_id}
@@ -345,6 +504,11 @@ async def test_patch_user_rejects_empty_update():
         await users_route.patch_user(
             "64f1f77bcf86cd7994390111",
             UpdateUser(),
+            current_user={
+                "_id": ObjectId("64f1f77bcf86cd7994390113"),
+                "role": "admin",
+                "status": "active",
+            },
         )
 
     assert error.value.status_code == 400
@@ -357,7 +521,14 @@ async def test_delete_user_deletes_by_id():
     user_id = "64f1f77bcf86cd7994390111"
     users_route.users_collection = collection
 
-    result = await users_route.delete_user(user_id)
+    result = await users_route.delete_user(
+        user_id,
+        current_user={
+            "_id": ObjectId("64f1f77bcf86cd7994390113"),
+            "role": "admin",
+            "status": "active",
+        },
+    )
 
     assert collection.deleted_filter == {"_id": ObjectId(user_id)}
     assert result == {"message": "User deleted successfully"}

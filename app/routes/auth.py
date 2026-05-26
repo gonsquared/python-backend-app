@@ -43,6 +43,7 @@ async def register(user: RegisterUser):
     user_dict.pop("verifyPassword")
     user_dict["passwordHash"] = hash_password(password)
     user_dict["status"] = "inactive"
+    user_dict["role"] = "user"
 
     result = await users_collection.insert_one(user_dict.copy())
     created_user = {"_id": result.inserted_id, **user_dict}

@@ -49,6 +49,16 @@ def create_access_token(subject: str) -> tuple[str, int]:
     return token, int(expires_delta.total_seconds())
 
 
+def verify_access_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except InvalidTokenError:
+        return None
+
+    subject = payload.get("sub")
+    return subject if isinstance(subject, str) else None
+
+
 def create_email_activation_token(subject: str) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=EMAIL_ACTIVATION_TOKEN_EXPIRE_MINUTES

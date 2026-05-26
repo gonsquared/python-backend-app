@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 
 UserStatus = Literal["inactive", "active", "archived"]
+UserRole = Literal["admin", "user"]
 
 # create user schema
 class User(BaseModel):
@@ -12,6 +13,7 @@ class User(BaseModel):
     email: EmailStr = Field(..., description="Valid email address is required")
     password: Optional[str] = Field(None, min_length=12, max_length=128, description="Password must be between 12 and 128 characters")
     status: UserStatus = Field("inactive", description="User lifecycle status")
+    role: UserRole = Field("user", description="User access role")
 
 # update user schema PUT and PATCH
 class UpdateUser(BaseModel):
@@ -20,6 +22,7 @@ class UpdateUser(BaseModel):
     email: Optional[EmailStr] = Field(None, description="Valid email address if updating email")
     password: Optional[str] = Field(None, min_length=12, max_length=128, description="Password must be between 12 and 128 characters")
     status: Optional[UserStatus] = Field(None, description="User lifecycle status")
+    role: Optional[UserRole] = Field(None, description="User access role")
 
 
 class RegisterUser(BaseModel):

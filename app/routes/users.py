@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from app.database import db
-from app.helpers.user_helper import serialize_user
+from app.dependencies.auth import get_current_user
+from app.helpers.user_helper import get_user_role, serialize_user
 from app.models.user_model import User, UpdateUser
 from app.middlewares.validate_email import validate_email
 from app.security import hash_password
@@ -30,48 +31,85 @@ async def ensure_email_is_unique(email: str, user_id: str | None = None):
 
     raise HTTPException(status_code=400, detail="Email already exists")
 
+def user_is_admin(user) -> bool:
+    return get_user_role(user) == "admin"
+
+def require_manage_users(user):
+    if user_is_admin(user):
+        return
+
+    raise HTTPException(status_code=403, detail="Manage users permission is required")
+
+def require_manage_own_or_users(target_user_id: str, current_user):
+    if user_is_admin(current_user):
+        return
+
+    if str(current_user.get("_id")) == target_user_id:
+        return
+
+    raise HTTPException(status_code=403, detail="You can only manage your own data")
+
+def apply_non_admin_field_restrictions(update_data: dict, current_user) -> dict:
+    if user_is_admin(current_user):
+        return update_data
+
+    return {
+        field: value
+        for field, value in update_data.items()
+        if field not in {"role", "status", "permissions", "createdBy"}
+    }
+
 @router.post("/", summary="Create a new user", dependencies=[Depends(validate_email)])
-async def create_user(user: User):
+async def create_user(user: User, current_user=Depends(get_current_user)):
+    require_manage_users(current_user)
     await ensure_email_is_unique(user.email)
 
     user_dict = model_to_dict(user)
     password = user_dict.pop("password", None)
     if password:
         user_dict["passwordHash"] = hash_password(password)
+    user_dict["createdBy"] = str(current_user["_id"])
 
     result = await users_collection.insert_one(user_dict.copy())
     return serialize_user({"_id": result.inserted_id, **user_dict})
 
 @router.get("/", summary="Get all users")
-async def get_users():
-    users = await users_collection.find().to_list(100)
+async def get_users(current_user=Depends(get_current_user)):
+    query = {} if user_is_admin(current_user) else {"_id": current_user["_id"]}
+    users = await users_collection.find(query).to_list(100)
     return [serialize_user(user) for user in users]
 
+@router.get("/by-email/{email}", summary="Get user by email")
+async def get_user_by_email(email: str, current_user=Depends(get_current_user)):
+    user = await users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    require_manage_own_or_users(str(user["_id"]), current_user)
+    return serialize_user(user)
+
 @router.get("/{user_id}", summary="Get user by ID")
-async def get_user_by_id(user_id: str):
+async def get_user_by_id(user_id: str, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
+    require_manage_own_or_users(user_id, current_user)
 
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return serialize_user(user)
 
-@router.get("/by-email/{email}", summary="Get user by email")
-async def get_user_by_email(email: str):
-    user = await users_collection.find_one({"email": email})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return serialize_user(user)
-
 @router.put("/{user_id}", summary="Update user by ID", dependencies=[Depends(validate_email)])
-async def update_user(user_id: str, updated_user: User):
+async def update_user(user_id: str, updated_user: User, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
+    require_manage_own_or_users(user_id, current_user)
 
     update_data = model_to_dict(updated_user)
     if not model_field_was_set(updated_user, "status"):
         update_data.pop("status", None)
+    if not model_field_was_set(updated_user, "role"):
+        update_data.pop("role", None)
+    update_data = apply_non_admin_field_restrictions(update_data, current_user)
 
     password = update_data.pop("password", None)
     if password:
@@ -88,11 +126,13 @@ async def update_user(user_id: str, updated_user: User):
     return serialize_user(user)
 
 @router.patch("/{user_id}", summary="Update user partially by ID", dependencies=[Depends(validate_email)])
-async def patch_user(user_id: str, updated_user: UpdateUser):
+async def patch_user(user_id: str, updated_user: UpdateUser, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
+    require_manage_own_or_users(user_id, current_user)
 
     update_data = {k: v for k, v in model_to_dict(updated_user).items() if v is not None}
+    update_data = apply_non_admin_field_restrictions(update_data, current_user)
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields provided for update")
 
@@ -113,9 +153,10 @@ async def patch_user(user_id: str, updated_user: UpdateUser):
     return serialize_user(user)
 
 @router.delete("/{user_id}", summary="Delete user by ID")
-async def delete_user(user_id: str):
+async def delete_user(user_id: str, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
+    require_manage_own_or_users(user_id, current_user)
 
     result = await users_collection.delete_one({"_id": ObjectId(user_id)})
     if result.deleted_count == 0:

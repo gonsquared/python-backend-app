@@ -93,7 +93,10 @@ async def test_register_hashes_password_sends_activation_email_and_returns_safe_
     assert "passwordHash" not in result["user"]
     assert result["user"]["email"] == "jane@example.com"
     assert result["user"]["status"] == "inactive"
+    assert result["user"]["role"] == "user"
+    assert result["user"]["permissions"] == ["manage_own"]
     assert collection.inserted_payload["status"] == "inactive"
+    assert collection.inserted_payload["role"] == "user"
     assert sent_messages[0]["email"] == "jane@example.com"
     assert "http://localhost:5173/activate-account?token=" in sent_messages[0]["link"]
     assert result["message"] == "Registration successful. Please check your email to activate your account."
@@ -129,6 +132,7 @@ async def test_login_returns_access_token_for_valid_credentials():
                 "lastName": "Doe",
                 "email": "jane@example.com",
                 "status": "active",
+                "role": "admin",
                 "passwordHash": auth_route.hash_password("VeryStrongPassword123!"),
             }
         ]
@@ -141,6 +145,8 @@ async def test_login_returns_access_token_for_valid_credentials():
     assert result["tokenType"] == "bearer"
     assert result["accessToken"]
     assert result["user"]["email"] == "jane@example.com"
+    assert result["user"]["role"] == "admin"
+    assert result["user"]["permissions"] == ["manage_users", "manage_own"]
     assert "passwordHash" not in result["user"]
 
 

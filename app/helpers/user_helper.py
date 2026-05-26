@@ -1,3 +1,14 @@
+def get_user_role(user) -> str:
+    return user.get("role") or "user"
+
+
+def get_user_permissions(user) -> list[str]:
+    role = get_user_role(user)
+    if role == "admin":
+        return ["manage_users", "manage_own"]
+    return ["manage_own"]
+
+
 def get_user_status(user) -> str:
     if user.get("status"):
         return user["status"]
@@ -15,6 +26,8 @@ def serialize_user(user) -> dict:
         "lastName": user.get("lastName"),
         "email": user.get("email"),
         "status": get_user_status(user),
+        "role": get_user_role(user),
+        "permissions": get_user_permissions(user),
     }
 
     if "isEmailActivated" in user:
