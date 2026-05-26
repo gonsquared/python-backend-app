@@ -47,6 +47,8 @@ The app reads from `.env` at runtime. The `Dockerfile` copies `.env_dev` to `.en
 | ----------- | ------------------------ | ---------------------------- |
 | `MONGO_URI` | MongoDB connection string | `mongodb://mongodb:27017`   |
 | `DB_NAME`   | MongoDB database name    | `backendapp`                 |
+| `ADMIN_EMAIL` | Seeded admin user email | Required for user seeder |
+| `ADMIN_PASSWORD` | Seeded admin user password | Required for user seeder |
 
 For local development without running the backend in Docker, use a local `.env`
 file like this:
@@ -54,6 +56,8 @@ file like this:
 ```bash
 MONGO_URI=mongodb://localhost:27018
 DB_NAME=backendapp
+ADMIN_EMAIL=gonsquared@gmail.com
+ADMIN_PASSWORD=L3tmein1234567890!
 ```
 
 ## Getting Started

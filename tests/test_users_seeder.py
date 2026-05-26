@@ -41,17 +41,19 @@ class FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_seed_users_upserts_known_admin(monkeypatch):
+async def test_seed_users_upserts_admin_from_environment(monkeypatch):
     collection = FakeUsersCollection()
     client = FakeClient(collection)
     monkeypatch.setattr(users_seeder, "AsyncIOMotorClient", lambda _uri: client)
+    monkeypatch.setenv("ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "EnvPassword123456!")
 
     await users_seeder.seed_users()
 
-    assert collection.updated_query == {"email": "gonsquared@gmail.com"}
+    assert collection.updated_query == {"email": "admin@example.com"}
     assert collection.update_upsert is True
     admin_data = collection.updated_data["$set"]
-    assert admin_data["email"] == "gonsquared@gmail.com"
+    assert admin_data["email"] == "admin@example.com"
     assert admin_data["role"] == "admin"
     assert admin_data["status"] == "active"
-    assert verify_password("L3tmein1234567890!", admin_data["passwordHash"])
+    assert verify_password("EnvPassword123456!", admin_data["passwordHash"])

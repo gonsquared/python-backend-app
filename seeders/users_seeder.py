@@ -10,9 +10,6 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongodb:27017")
 DB_NAME = os.getenv("DB_NAME", "backendapp")
 COLLECTION_NAME = "users"
 
-ADMIN_EMAIL = "gonsquared@gmail.com"
-ADMIN_PASSWORD = "L3tmein1234567890!"
-
 sample_users = [
     {"firstName": "Alice", "lastName": "Johnson", "email": "alice@example.com", "status": "active", "role": "user"},
     {"firstName": "Bob", "lastName": "Smith", "email": "bob@example.com", "status": "active", "role": "user"},
@@ -21,6 +18,11 @@ sample_users = [
 ]
 
 async def seed_users():
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    if not admin_email or not admin_password:
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured")
+
     client = AsyncIOMotorClient(MONGO_URI)
     db = client[DB_NAME]
     users_collection = db[COLLECTION_NAME]
@@ -30,20 +32,20 @@ async def seed_users():
     print(f"Inserted {len(result.inserted_ids)} users into '{COLLECTION_NAME}' collection.")
 
     await users_collection.update_one(
-        {"email": ADMIN_EMAIL},
+        {"email": admin_email},
         {
             "$set": {
-                "firstName": "Gon",
-                "lastName": "Squared",
-                "email": ADMIN_EMAIL,
+                "firstName": "Dar",
+                "lastName": "Gon",
+                "email": admin_email,
                 "status": "active",
                 "role": "admin",
-                "passwordHash": hash_password(ADMIN_PASSWORD),
+                "passwordHash": hash_password(admin_password),
             }
         },
         upsert=True,
     )
-    print(f"Upserted admin user '{ADMIN_EMAIL}'.")
+    print(f"Upserted admin user '{admin_email}'.")
     client.close()
 
 if __name__ == "__main__":
