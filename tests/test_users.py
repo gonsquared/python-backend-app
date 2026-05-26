@@ -5,9 +5,10 @@ from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.main import origins
+from app.config import get_settings
 from app.models.user_model import UpdateUser, User
 from app.models.user_model import UpdateAvatar
+from app.middlewares.validate_email import validate_email
 from app.routes import users as users_route
 from app.security import verify_password
 
@@ -15,9 +16,20 @@ from app.security import verify_password
 class FakeCursor:
     def __init__(self, documents):
         self.documents = documents
+        self.skip_value = 0
+        self.limit_value = None
+
+    def skip(self, value):
+        self.skip_value = value
+        return self
+
+    def limit(self, value):
+        self.limit_value = value
+        return self
 
     async def to_list(self, _limit):
-        return self.documents
+        limit = self.limit_value or _limit
+        return self.documents[self.skip_value : self.skip_value + limit]
 
 
 class FakeUsersCollection:
@@ -121,8 +133,29 @@ def test_user_model_rejects_missing_last_name():
 
 
 def test_cors_allows_docker_frontend_origin():
-    assert "http://localhost:5173" in origins
-    assert "http://127.0.0.1:5173" in origins
+    settings = get_settings()
+
+    assert "http://localhost:5173" in settings.cors_origins
+    assert "http://127.0.0.1:5173" in settings.cors_origins
+
+
+def test_settings_parse_cors_origins_from_environment(monkeypatch):
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        "https://app.example.com, http://localhost:5173 ,,https://admin.example.com",
+    )
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.cors_origins == [
+        "https://app.example.com",
+        "http://localhost:5173",
+        "https://admin.example.com",
+    ]
 
 
 @pytest.mark.asyncio
@@ -246,6 +279,46 @@ async def test_regular_user_only_lists_their_own_user():
     )
 
     assert [user["id"] for user in result] == [str(user_id)]
+
+
+@pytest.mark.asyncio
+async def test_get_users_applies_skip_and_limit():
+    user_ids = [
+        ObjectId("64f1f77bcf86cd7994390111"),
+        ObjectId("64f1f77bcf86cd7994390112"),
+        ObjectId("64f1f77bcf86cd7994390113"),
+    ]
+    users_route.users_collection = FakeUsersCollection(
+        [
+            {
+                "_id": user_id,
+                "firstName": f"User{index}",
+                "lastName": "Example",
+                "email": f"user{index}@example.com",
+                "status": "active",
+                "role": "user",
+            }
+            for index, user_id in enumerate(user_ids)
+        ]
+    )
+
+    result = await users_route.get_users(
+        limit=1,
+        skip=1,
+        current_user={"_id": user_ids[0], "role": "admin", "status": "active"},
+    )
+
+    assert [user["id"] for user in result] == [str(user_ids[1])]
+
+
+def test_user_routes_do_not_use_email_body_middleware():
+    route_dependencies = [
+        dependency.call
+        for route in users_route.router.routes
+        for dependency in getattr(route, "dependencies", [])
+    ]
+
+    assert validate_email not in route_dependencies
 
 
 @pytest.mark.asyncio

@@ -2,15 +2,28 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from jwt import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
+from jwt import InvalidTokenError
 
 
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "change-this-development-secret-at-least-32-bytes",
-)
+DEFAULT_DEV_JWT_SECRET_KEY = "dev-only-jwt-secret-change-before-production-123456"
+
+
+def get_jwt_secret_key() -> str:
+    secret_key = os.getenv("JWT_SECRET_KEY")
+    app_env = os.getenv("APP_ENV", "development").lower()
+
+    if secret_key:
+        return secret_key
+
+    if app_env in {"production", "prod"}:
+        raise RuntimeError("JWT_SECRET_KEY must be configured in production")
+
+    return DEFAULT_DEV_JWT_SECRET_KEY
+
+
+JWT_SECRET_KEY = get_jwt_secret_key()
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 EMAIL_ACTIVATION_TOKEN_EXPIRE_MINUTES = int(

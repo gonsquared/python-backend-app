@@ -1,21 +1,19 @@
 from datetime import datetime, timezone
+from typing import Annotated
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.helpers.user_helper import get_user_permissions
 from app.models.note_model import Note, UpdateNote
+from app.utils import model_to_dict
 
 router = APIRouter()
 notes_collection = db["notes"]
-
-
-def model_to_dict(model):
-    if hasattr(model, "model_dump"):
-        return model.model_dump(mode="json")
-    return model.dict()
+DEFAULT_LIMIT = 100
+MAX_LIMIT = 100
 
 
 def has_permission(user, permission: str) -> bool:
@@ -98,7 +96,11 @@ async def create_note(note: Note, current_user=Depends(get_current_user)):
 
 
 @router.get("/", summary="Get notes")
-async def get_notes(current_user=Depends(get_current_user)):
+async def get_notes(
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    current_user=Depends(get_current_user),
+):
     if can_manage_all_notes(current_user):
         query = {}
     elif can_manage_own_notes(current_user):
@@ -108,15 +110,25 @@ async def get_notes(current_user=Depends(get_current_user)):
             status_code=403, detail="Manage own notes permission is required"
         )
 
-    notes = await notes_collection.find(query).to_list(100)
+    notes = await notes_collection.find(query).skip(skip).limit(limit).to_list(limit)
     return [serialize_note(note) for note in notes]
 
 
 @router.get("/by-user/{user_id}", summary="Get notes by user")
-async def get_notes_by_user(user_id: str, current_user=Depends(get_current_user)):
+async def get_notes_by_user(
+    user_id: str,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    current_user=Depends(get_current_user),
+):
     validate_user_id(user_id)
     if can_manage_all_notes(current_user):
-        notes = await notes_collection.find({"user": user_id}).to_list(100)
+        notes = (
+            await notes_collection.find({"user": user_id})
+            .skip(skip)
+            .limit(limit)
+            .to_list(limit)
+        )
         return [serialize_note(note) for note in notes]
 
     if not can_manage_own_notes(current_user):
@@ -127,7 +139,12 @@ async def get_notes_by_user(user_id: str, current_user=Depends(get_current_user)
     if str(current_user.get("_id")) != user_id:
         raise HTTPException(status_code=403, detail="You can only manage your own notes")
 
-    notes = await notes_collection.find({"user": user_id}).to_list(100)
+    notes = (
+        await notes_collection.find({"user": user_id})
+        .skip(skip)
+        .limit(limit)
+        .to_list(limit)
+    )
     return [serialize_note(note) for note in notes]
 
 

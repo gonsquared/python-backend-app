@@ -49,6 +49,9 @@ The app reads from `.env` at runtime. The `Dockerfile` copies `.env_dev` to `.en
 | `DB_NAME`   | MongoDB database name    | `backendapp`                 |
 | `ADMIN_EMAIL` | Seeded admin user email | Required for user seeder |
 | `ADMIN_PASSWORD` | Seeded admin user password | Required for user seeder |
+| `JWT_SECRET_KEY` | JWT signing key | Required outside local development |
+| `CORS_ORIGINS` | Comma-separated allowed browser origins | Local Vite origins |
+| `SMTP_TIMEOUT_SECONDS` | SMTP connection timeout | `10` |
 
 For local development without running the backend in Docker, use a local `.env`
 file like this:
@@ -56,9 +59,12 @@ file like this:
 ```bash
 MONGO_URI=mongodb://localhost:27018
 DB_NAME=backendapp
+JWT_SECRET_KEY=replace-with-at-least-32-random-bytes
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 ```
+
+Use `.env.example` as a safe template. Do not commit real secrets.
 
 ## Getting Started
 
@@ -215,6 +221,7 @@ The API allows requests from:
 - `http://127.0.0.1:5173`
 
 This matches the default Vite dev server port for a frontend companion app.
+Set `CORS_ORIGINS` to a comma-separated allowlist for deployed environments.
 
 ## Troubleshooting
 

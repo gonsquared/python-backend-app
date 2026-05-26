@@ -13,9 +13,20 @@ from app.routes import notes as notes_route
 class FakeCursor:
     def __init__(self, documents):
         self.documents = documents
+        self.skip_value = 0
+        self.limit_value = None
+
+    def skip(self, value):
+        self.skip_value = value
+        return self
+
+    def limit(self, value):
+        self.limit_value = value
+        return self
 
     async def to_list(self, _limit):
-        return self.documents
+        limit = self.limit_value or _limit
+        return self.documents[self.skip_value : self.skip_value + limit]
 
 
 class FakeNotesCollection:
@@ -201,6 +212,37 @@ async def test_regular_user_lists_only_their_notes():
     )
 
     assert [note["title"] for note in result] == ["Mine"]
+
+
+@pytest.mark.asyncio
+async def test_get_notes_applies_skip_and_limit():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    notes_route.notes_collection = FakeNotesCollection(
+        [
+            {
+                "_id": ObjectId("64f1f77bcf86cd7994390222"),
+                "title": "One",
+                "contents": "Owned",
+                "status": "published",
+                "user": str(owner_id),
+            },
+            {
+                "_id": ObjectId("64f1f77bcf86cd7994390223"),
+                "title": "Two",
+                "contents": "Owned",
+                "status": "published",
+                "user": str(owner_id),
+            },
+        ]
+    )
+
+    result = await notes_route.get_notes(
+        limit=1,
+        skip=1,
+        current_user={"_id": owner_id, "role": "user", "status": "active"},
+    )
+
+    assert [note["title"] for note in result] == ["Two"]
 
 
 @pytest.mark.asyncio

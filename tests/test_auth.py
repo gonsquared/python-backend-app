@@ -1,3 +1,4 @@
+import importlib
 from types import SimpleNamespace
 
 import pytest
@@ -55,6 +56,19 @@ class FakeUsersCollection:
         return SimpleNamespace(matched_count=self.matched_count)
 
 
+def test_security_rejects_missing_jwt_secret_in_production(monkeypatch):
+    import app.security as security
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+
+    with pytest.raises(RuntimeError):
+        importlib.reload(security)
+
+    monkeypatch.setenv("APP_ENV", "development")
+    importlib.reload(security)
+
+
 @pytest.fixture(autouse=True)
 def restore_users_collection():
     original_collection = auth_route.users_collection
@@ -67,6 +81,11 @@ async def test_register_hashes_password_sends_activation_email_and_returns_safe_
     collection = FakeUsersCollection()
     auth_route.users_collection = collection
     sent_messages = []
+
+    async def fake_run_in_threadpool(func, *args):
+        return func(*args)
+
+    monkeypatch.setattr(auth_route, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(
         auth_route,
         "send_activation_email",
@@ -100,6 +119,33 @@ async def test_register_hashes_password_sends_activation_email_and_returns_safe_
     assert sent_messages[0]["email"] == "jane@example.com"
     assert "http://localhost:5173/activate-account?token=" in sent_messages[0]["link"]
     assert result["message"] == "Registration successful. Please check your email to activate your account."
+
+
+@pytest.mark.asyncio
+async def test_register_dispatches_activation_email_off_event_loop(monkeypatch):
+    collection = FakeUsersCollection()
+    auth_route.users_collection = collection
+    dispatched = []
+
+    async def fake_run_in_threadpool(func, *args):
+        dispatched.append({"func": func, "args": args})
+        return func(*args)
+
+    monkeypatch.setattr(auth_route, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(auth_route, "send_activation_email", lambda _email, _link: None)
+
+    await auth_route.register(
+        RegisterUser(
+            firstName="Jane",
+            lastName="Doe",
+            email="jane@example.com",
+            password="VeryStrongPassword123!",
+            verifyPassword="VeryStrongPassword123!",
+        )
+    )
+
+    assert dispatched[0]["func"] is auth_route.send_activation_email
+    assert dispatched[0]["args"][0] == "jane@example.com"
 
 
 @pytest.mark.asyncio

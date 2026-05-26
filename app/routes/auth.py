@@ -2,6 +2,7 @@ import os
 
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 
 from app.database import db
 from app.helpers.email_helper import send_activation_email
@@ -14,18 +15,13 @@ from app.security import (
     verify_email_activation_token,
     verify_password,
 )
+from app.utils import model_to_dict
 
 router = APIRouter()
 users_collection = db["users"]
 
 
-def model_to_dict(model):
-    if hasattr(model, "model_dump"):
-        return model.model_dump(mode="json")
-    return model.dict()
-
-
-async def ensure_email_is_unique(email: str):
+async def ensure_email_is_unique(email: str) -> None:
     existing = await users_collection.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
@@ -50,7 +46,7 @@ async def register(user: RegisterUser):
     token = create_email_activation_token(str(result.inserted_id))
     frontend_base_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
     activation_link = f"{frontend_base_url}/activate-account?token={token}"
-    send_activation_email(user.email, activation_link)
+    await run_in_threadpool(send_activation_email, user.email, activation_link)
     return {
         "message": "Registration successful. Please check your email to activate your account.",
         "user": serialize_user(created_user),

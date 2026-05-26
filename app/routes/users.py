@@ -1,19 +1,20 @@
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Annotated
+
 from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query
+
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.helpers.user_helper import get_user_role, serialize_user
 from app.models.user_model import User, UpdateAvatar, UpdateUser
-from app.middlewares.validate_email import validate_email
 from app.security import hash_password
+from app.utils import model_to_dict
 
 router = APIRouter()
 users_collection = db["users"]
+DEFAULT_LIMIT = 100
+MAX_LIMIT = 100
 
-def model_to_dict(model):
-    if hasattr(model, "model_dump"):
-        return model.model_dump(mode="json")
-    return model.dict()
 
 def model_field_was_set(model, field_name: str) -> bool:
     fields_set = getattr(model, "model_fields_set", None)
@@ -59,7 +60,7 @@ def apply_non_admin_field_restrictions(update_data: dict, current_user) -> dict:
         if field not in {"role", "status", "permissions", "createdBy"}
     }
 
-@router.post("/", summary="Create a new user", dependencies=[Depends(validate_email)])
+@router.post("/", summary="Create a new user")
 async def create_user(user: User, current_user=Depends(get_current_user)):
     require_manage_users(current_user)
     await ensure_email_is_unique(user.email)
@@ -74,9 +75,13 @@ async def create_user(user: User, current_user=Depends(get_current_user)):
     return serialize_user({"_id": result.inserted_id, **user_dict})
 
 @router.get("/", summary="Get all users")
-async def get_users(current_user=Depends(get_current_user)):
+async def get_users(
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    current_user=Depends(get_current_user),
+):
     query = {} if user_is_admin(current_user) else {"_id": current_user["_id"]}
-    users = await users_collection.find(query).to_list(100)
+    users = await users_collection.find(query).skip(skip).limit(limit).to_list(limit)
     return [serialize_user(user) for user in users]
 
 @router.get("/by-email/{email}", summary="Get user by email")
@@ -98,7 +103,7 @@ async def get_user_by_id(user_id: str, current_user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     return serialize_user(user)
 
-@router.put("/{user_id}", summary="Update user by ID", dependencies=[Depends(validate_email)])
+@router.put("/{user_id}", summary="Update user by ID")
 async def update_user(user_id: str, updated_user: User, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
@@ -125,7 +130,7 @@ async def update_user(user_id: str, updated_user: User, current_user=Depends(get
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     return serialize_user(user)
 
-@router.patch("/{user_id}", summary="Update user partially by ID", dependencies=[Depends(validate_email)])
+@router.patch("/{user_id}", summary="Update user partially by ID")
 async def patch_user(user_id: str, updated_user: UpdateUser, current_user=Depends(get_current_user)):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Invalid user ID format")
