@@ -162,18 +162,22 @@ User schema: `firstName` (2–100 chars), `lastName` (2–100 chars), `email` (v
 
 Password values are hashed with Argon2id before storage. API responses do not include password or password hash data.
 
+User permissions are derived from role unless an explicit `permissions` list is present. Admin users receive `manage_users`, `manage_own`, `manage_notes`, and `manage_own_notes`. Regular users receive `manage_own` and `manage_own_notes`.
+
 ### Notes — `/api/notes`
 
-| Method | Endpoint     | Description           |
-| ------ | ------------ | --------------------- |
-| POST   | `/`          | Create a note         |
-| GET    | `/`          | List accessible notes |
+| Method | Endpoint             | Description           |
+| ------ | -------------------- | --------------------- |
+| POST   | `/`                  | Create a note         |
+| GET    | `/`                  | List accessible notes |
 | GET    | `/by-user/{user_id}` | List notes by user |
-| GET    | `/{note_id}` | Get note by ID        |
-| PUT    | `/{note_id}` | Update a note         |
-| DELETE | `/{note_id}` | Delete a note         |
+| GET    | `/{note_id}`         | Get note by ID        |
+| PUT    | `/{note_id}`         | Update a note         |
+| DELETE | `/{note_id}`         | Delete a note         |
 
 Note schema: `title`, `contents`, and `status` (`published`, `not published`, or `archived`). The API sets `user`, `createdAt`, and `updatedAt`.
+
+Notes access is permission-based: `manage_notes` can view notes for all users, while `manage_own_notes` can create and manage only the current user's notes.
 
 ### Auth — `/api/auth`
 

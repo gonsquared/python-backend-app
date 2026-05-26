@@ -139,6 +139,41 @@ async def test_admin_lists_all_notes():
 
 
 @pytest.mark.asyncio
+async def test_user_with_manage_notes_permission_lists_all_notes():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    other_id = ObjectId("64f1f77bcf86cd7994390112")
+    notes_route.notes_collection = FakeNotesCollection(
+        [
+            {
+                "_id": ObjectId("64f1f77bcf86cd7994390222"),
+                "title": "Mine",
+                "contents": "Owned",
+                "status": "published",
+                "user": str(owner_id),
+            },
+            {
+                "_id": ObjectId("64f1f77bcf86cd7994390223"),
+                "title": "Theirs",
+                "contents": "Other",
+                "status": "published",
+                "user": str(other_id),
+            },
+        ]
+    )
+
+    result = await notes_route.get_notes(
+        current_user={
+            "_id": owner_id,
+            "role": "user",
+            "status": "active",
+            "permissions": ["manage_notes"],
+        }
+    )
+
+    assert [note["title"] for note in result] == ["Mine", "Theirs"]
+
+
+@pytest.mark.asyncio
 async def test_regular_user_lists_only_their_notes():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     other_id = ObjectId("64f1f77bcf86cd7994390112")
@@ -169,6 +204,25 @@ async def test_regular_user_lists_only_their_notes():
 
 
 @pytest.mark.asyncio
+async def test_user_without_manage_own_notes_cannot_list_notes():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    notes_route.notes_collection = FakeNotesCollection()
+
+    with pytest.raises(HTTPException) as error:
+        await notes_route.get_notes(
+            current_user={
+                "_id": owner_id,
+                "role": "guest",
+                "status": "active",
+                "permissions": [],
+            }
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Manage own notes permission is required"
+
+
+@pytest.mark.asyncio
 async def test_admin_gets_notes_by_user():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     other_id = ObjectId("64f1f77bcf86cd7994390112")
@@ -194,6 +248,35 @@ async def test_admin_gets_notes_by_user():
     result = await notes_route.get_notes_by_user(
         str(other_id),
         current_user={"_id": owner_id, "role": "admin", "status": "active"},
+    )
+
+    assert [note["title"] for note in result] == ["Theirs"]
+
+
+@pytest.mark.asyncio
+async def test_user_with_manage_notes_permission_gets_notes_by_user():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    other_id = ObjectId("64f1f77bcf86cd7994390112")
+    notes_route.notes_collection = FakeNotesCollection(
+        [
+            {
+                "_id": ObjectId("64f1f77bcf86cd7994390222"),
+                "title": "Theirs",
+                "contents": "Other",
+                "status": "published",
+                "user": str(other_id),
+            }
+        ]
+    )
+
+    result = await notes_route.get_notes_by_user(
+        str(other_id),
+        current_user={
+            "_id": owner_id,
+            "role": "user",
+            "status": "active",
+            "permissions": ["manage_notes"],
+        },
     )
 
     assert [note["title"] for note in result] == ["Theirs"]
@@ -238,6 +321,26 @@ async def test_regular_user_cannot_get_another_users_notes_by_user():
 
 
 @pytest.mark.asyncio
+async def test_user_without_manage_own_notes_cannot_get_their_notes_by_user():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    notes_route.notes_collection = FakeNotesCollection()
+
+    with pytest.raises(HTTPException) as error:
+        await notes_route.get_notes_by_user(
+            str(owner_id),
+            current_user={
+                "_id": owner_id,
+                "role": "guest",
+                "status": "active",
+                "permissions": [],
+            },
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Manage own notes permission is required"
+
+
+@pytest.mark.asyncio
 async def test_get_notes_by_user_rejects_invalid_user_id():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
 
@@ -274,6 +377,26 @@ async def test_regular_user_cannot_read_someone_elses_note():
         )
 
     assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_user_without_manage_own_notes_cannot_create_note():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    notes_route.notes_collection = FakeNotesCollection()
+
+    with pytest.raises(HTTPException) as error:
+        await notes_route.create_note(
+            Note(title="Draft", contents="No access"),
+            current_user={
+                "_id": owner_id,
+                "role": "guest",
+                "status": "active",
+                "permissions": [],
+            },
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Manage own notes permission is required"
 
 
 @pytest.mark.asyncio

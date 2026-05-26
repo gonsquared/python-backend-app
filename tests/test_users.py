@@ -141,7 +141,12 @@ async def test_get_users_returns_serialized_users():
             "email": "jane@example.com",
             "status": "active",
             "role": "admin",
-            "permissions": ["manage_users", "manage_own"],
+            "permissions": [
+                "manage_users",
+                "manage_own",
+                "manage_notes",
+                "manage_own_notes",
+            ],
         }
     ]
 

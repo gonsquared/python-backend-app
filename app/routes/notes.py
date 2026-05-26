@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.database import db
 from app.dependencies.auth import get_current_user
-from app.helpers.user_helper import get_user_role
+from app.helpers.user_helper import get_user_permissions
 from app.models.note_model import Note, UpdateNote
 
 router = APIRouter()
@@ -18,8 +18,16 @@ def model_to_dict(model):
     return model.dict()
 
 
-def user_is_admin(user) -> bool:
-    return get_user_role(user) == "admin"
+def has_permission(user, permission: str) -> bool:
+    return permission in get_user_permissions(user)
+
+
+def can_manage_all_notes(user) -> bool:
+    return has_permission(user, "manage_notes")
+
+
+def can_manage_own_notes(user) -> bool:
+    return has_permission(user, "manage_own_notes")
 
 
 def note_belongs_to_user(note, user) -> bool:
@@ -27,10 +35,22 @@ def note_belongs_to_user(note, user) -> bool:
 
 
 def require_note_access(note, current_user):
-    if user_is_admin(current_user) or note_belongs_to_user(note, current_user):
+    if can_manage_all_notes(current_user):
+        return
+
+    if can_manage_own_notes(current_user) and note_belongs_to_user(
+        note, current_user
+    ):
         return
 
     raise HTTPException(status_code=403, detail="You can only manage your own notes")
+
+
+def require_manage_own_notes(current_user):
+    if can_manage_own_notes(current_user):
+        return
+
+    raise HTTPException(status_code=403, detail="Manage own notes permission is required")
 
 
 def serialize_note(note):
@@ -65,6 +85,8 @@ async def find_note_or_404(note_id: str):
 
 @router.post("/", summary="Create a new note")
 async def create_note(note: Note, current_user=Depends(get_current_user)):
+    require_manage_own_notes(current_user)
+
     now = datetime.now(timezone.utc)
     note_dict = model_to_dict(note)
     note_dict["user"] = str(current_user["_id"])
@@ -77,7 +99,15 @@ async def create_note(note: Note, current_user=Depends(get_current_user)):
 
 @router.get("/", summary="Get notes")
 async def get_notes(current_user=Depends(get_current_user)):
-    query = {} if user_is_admin(current_user) else {"user": str(current_user["_id"])}
+    if can_manage_all_notes(current_user):
+        query = {}
+    elif can_manage_own_notes(current_user):
+        query = {"user": str(current_user["_id"])}
+    else:
+        raise HTTPException(
+            status_code=403, detail="Manage own notes permission is required"
+        )
+
     notes = await notes_collection.find(query).to_list(100)
     return [serialize_note(note) for note in notes]
 
@@ -85,7 +115,16 @@ async def get_notes(current_user=Depends(get_current_user)):
 @router.get("/by-user/{user_id}", summary="Get notes by user")
 async def get_notes_by_user(user_id: str, current_user=Depends(get_current_user)):
     validate_user_id(user_id)
-    if not user_is_admin(current_user) and str(current_user.get("_id")) != user_id:
+    if can_manage_all_notes(current_user):
+        notes = await notes_collection.find({"user": user_id}).to_list(100)
+        return [serialize_note(note) for note in notes]
+
+    if not can_manage_own_notes(current_user):
+        raise HTTPException(
+            status_code=403, detail="Manage own notes permission is required"
+        )
+
+    if str(current_user.get("_id")) != user_id:
         raise HTTPException(status_code=403, detail="You can only manage your own notes")
 
     notes = await notes_collection.find({"user": user_id}).to_list(100)

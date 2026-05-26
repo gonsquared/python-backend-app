@@ -77,6 +77,12 @@ async def test_seed_users_upserts_admin_from_environment(monkeypatch):
     assert admin_data["email"] == "admin@example.com"
     assert admin_data["role"] == "admin"
     assert admin_data["status"] == "active"
+    assert admin_data["permissions"] == [
+        "manage_users",
+        "manage_own",
+        "manage_notes",
+        "manage_own_notes",
+    ]
     assert verify_password("EnvPassword123456!", admin_data["passwordHash"])
 
 

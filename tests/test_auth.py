@@ -94,7 +94,7 @@ async def test_register_hashes_password_sends_activation_email_and_returns_safe_
     assert result["user"]["email"] == "jane@example.com"
     assert result["user"]["status"] == "inactive"
     assert result["user"]["role"] == "user"
-    assert result["user"]["permissions"] == ["manage_own"]
+    assert result["user"]["permissions"] == ["manage_own", "manage_own_notes"]
     assert collection.inserted_payload["status"] == "inactive"
     assert collection.inserted_payload["role"] == "user"
     assert sent_messages[0]["email"] == "jane@example.com"
@@ -146,7 +146,12 @@ async def test_login_returns_access_token_for_valid_credentials():
     assert result["accessToken"]
     assert result["user"]["email"] == "jane@example.com"
     assert result["user"]["role"] == "admin"
-    assert result["user"]["permissions"] == ["manage_users", "manage_own"]
+    assert result["user"]["permissions"] == [
+        "manage_users",
+        "manage_own",
+        "manage_notes",
+        "manage_own_notes",
+    ]
     assert "passwordHash" not in result["user"]
 
 

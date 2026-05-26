@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import dotenv_values, load_dotenv
+from app.helpers.user_helper import ADMIN_PERMISSIONS
 from app.security import hash_password
 
 load_dotenv()
@@ -60,6 +61,7 @@ async def seed_users():
                 "email": admin_email,
                 "status": "active",
                 "role": "admin",
+                "permissions": ADMIN_PERMISSIONS,
                 "passwordHash": hash_password(admin_password),
             }
         },
