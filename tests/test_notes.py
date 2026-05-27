@@ -52,7 +52,7 @@ class FakeNotesCollection:
 
         return None
 
-    def find(self, query=None):
+    def find(self, query=None, projection=None):
         if not query:
             return FakeCursor(self.documents)
 
@@ -80,10 +80,12 @@ class FakeNotesCollection:
 
 
 @pytest.fixture(autouse=True)
-def restore_notes_collection():
-    original_collection = notes_route.notes_collection
+def restore_collections():
+    original_notes = notes_route.notes_collection
+    original_users = notes_route.users_collection
     yield
-    notes_route.notes_collection = original_collection
+    notes_route.notes_collection = original_notes
+    notes_route.users_collection = original_users
 
 
 def test_note_model_defaults_to_not_published():
@@ -123,6 +125,7 @@ async def test_create_note_sets_creator_and_timestamps():
 async def test_admin_lists_all_notes():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     other_id = ObjectId("64f1f77bcf86cd7994390112")
+    notes_route.users_collection = FakeNotesCollection([])
     notes_route.notes_collection = FakeNotesCollection(
         [
             {
@@ -153,6 +156,7 @@ async def test_admin_lists_all_notes():
 async def test_user_with_manage_notes_permission_lists_all_notes():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     other_id = ObjectId("64f1f77bcf86cd7994390112")
+    notes_route.users_collection = FakeNotesCollection([])
     notes_route.notes_collection = FakeNotesCollection(
         [
             {
@@ -188,6 +192,7 @@ async def test_user_with_manage_notes_permission_lists_all_notes():
 async def test_regular_user_lists_only_their_notes():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     other_id = ObjectId("64f1f77bcf86cd7994390112")
+    notes_route.users_collection = FakeNotesCollection([])
     notes_route.notes_collection = FakeNotesCollection(
         [
             {
@@ -217,6 +222,7 @@ async def test_regular_user_lists_only_their_notes():
 @pytest.mark.asyncio
 async def test_get_notes_applies_skip_and_limit():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    notes_route.users_collection = FakeNotesCollection([])
     notes_route.notes_collection = FakeNotesCollection(
         [
             {
