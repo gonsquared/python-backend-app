@@ -9,3 +9,4 @@ pytest-asyncio
 pre-commit
 argon2-cffi
 PyJWT
+python-multipart

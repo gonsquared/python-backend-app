@@ -2,12 +2,13 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.helpers.user_helper import get_user_permissions
 from app.models.note_model import Note, UpdateNote
+from app.storage import LocalStorageBackend, get_storage
 from app.utils import model_to_dict
 
 router = APIRouter()
@@ -15,6 +16,8 @@ notes_collection = db["notes"]
 users_collection = db["users"]
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 100
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 def has_permission(user, permission: str) -> bool:
@@ -197,3 +200,32 @@ async def delete_note(note_id: str, current_user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Note not found")
 
     return {"message": "Note deleted successfully"}
+
+
+@router.post("/{note_id}/image", summary="Upload image for a note")
+async def upload_note_image(
+    note_id: str,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    storage: LocalStorageBackend = Depends(get_storage),
+):
+    note = await find_note_or_404(note_id)
+    require_note_access(note, current_user)
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, GIF, and WebP images are allowed")
+
+    content = await file.read()
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Image must be under 5MB")
+
+    if note.get("imagePath"):
+        storage.delete(note["imagePath"])
+
+    filename = await storage.save(file.filename or "upload", content)
+
+    await notes_collection.update_one(
+        {"_id": ObjectId(note_id)},
+        {"$set": {"imagePath": filename}},
+    )
+    return {"imagePath": filename}

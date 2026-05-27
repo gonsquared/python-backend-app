@@ -475,3 +475,85 @@ async def test_update_note_refreshes_updated_at():
     assert collection.updated_data["$set"]["title"] == "New"
     assert collection.updated_data["$set"]["status"] == "published"
     assert isinstance(collection.updated_data["$set"]["updatedAt"], datetime)
+
+
+class FakeStorage:
+    def __init__(self, saved_path="abc123.jpg"):
+        self.saved_path = saved_path
+        self.deleted_paths = []
+        self.save_called_with = None
+
+    async def save(self, filename_hint, content):
+        self.save_called_with = (filename_hint, content)
+        return self.saved_path
+
+    def delete(self, path):
+        self.deleted_paths.append(path)
+
+
+class FakeUploadFile:
+    def __init__(self, filename="photo.jpg", content_type="image/jpeg", content=b"imgdata"):
+        self.filename = filename
+        self.content_type = content_type
+        self._content = content
+
+    async def read(self):
+        return self._content
+
+
+@pytest.mark.asyncio
+async def test_upload_note_image_saves_file_and_updates_note():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    note_id = ObjectId("64f1f77bcf86cd7994390222")
+    notes_route.notes_collection = FakeNotesCollection(
+        [{"_id": note_id, "title": "T", "contents": "", "status": "not published", "user": str(owner_id)}]
+    )
+    storage = FakeStorage("new.jpg")
+
+    result = await notes_route.upload_note_image(
+        str(note_id),
+        file=FakeUploadFile(),
+        current_user={"_id": owner_id, "role": "user", "status": "active"},
+        storage=storage,
+    )
+
+    assert result == {"imagePath": "new.jpg"}
+
+
+@pytest.mark.asyncio
+async def test_upload_note_image_rejects_invalid_content_type():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    note_id = ObjectId("64f1f77bcf86cd7994390222")
+    notes_route.notes_collection = FakeNotesCollection(
+        [{"_id": note_id, "title": "T", "contents": "", "status": "not published", "user": str(owner_id)}]
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await notes_route.upload_note_image(
+            str(note_id),
+            file=FakeUploadFile(content_type="application/pdf"),
+            current_user={"_id": owner_id, "role": "user", "status": "active"},
+            storage=FakeStorage(),
+        )
+
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_note_image_deletes_old_image_before_saving_new():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    note_id = ObjectId("64f1f77bcf86cd7994390222")
+    notes_route.notes_collection = FakeNotesCollection(
+        [{"_id": note_id, "title": "T", "contents": "", "status": "not published",
+          "user": str(owner_id), "imagePath": "old.jpg"}]
+    )
+    storage = FakeStorage("new.jpg")
+
+    await notes_route.upload_note_image(
+        str(note_id),
+        file=FakeUploadFile(),
+        current_user={"_id": owner_id, "role": "user", "status": "active"},
+        storage=storage,
+    )
+
+    assert "old.jpg" in storage.deleted_paths
