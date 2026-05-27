@@ -12,6 +12,7 @@ from app.utils import model_to_dict
 
 router = APIRouter()
 notes_collection = db["notes"]
+users_collection = db["users"]
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 100
 
@@ -51,13 +52,14 @@ def require_manage_own_notes(current_user):
     raise HTTPException(status_code=403, detail="Manage own notes permission is required")
 
 
-def serialize_note(note):
+def serialize_note(note, user_name: str = None):
     return {
         "id": str(note["_id"]),
         "title": note["title"],
         "contents": note["contents"],
         "status": note.get("status", "not published"),
         "user": note["user"],
+        "userName": user_name or note["user"],
         "createdAt": note.get("createdAt"),
         "updatedAt": note.get("updatedAt"),
     }
@@ -111,7 +113,12 @@ async def get_notes(
         )
 
     notes = await notes_collection.find(query).skip(skip).limit(limit).to_list(limit)
-    return [serialize_note(note) for note in notes]
+
+    user_ids = list({ObjectId(note["user"]) for note in notes if ObjectId.is_valid(note.get("user", ""))})
+    users = await users_collection.find({"_id": {"$in": user_ids}}, {"_id": 1, "firstName": 1, "lastName": 1}).to_list(len(user_ids))
+    user_name_map = {str(u["_id"]): f"{u.get('firstName', '')} {u.get('lastName', '')}".strip() for u in users}
+
+    return [serialize_note(note, user_name_map.get(note["user"], note["user"])) for note in notes]
 
 
 @router.get("/by-user/{user_id}", summary="Get notes by user")
