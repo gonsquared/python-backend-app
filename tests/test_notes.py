@@ -83,9 +83,11 @@ class FakeNotesCollection:
 def restore_collections():
     original_notes = notes_route.notes_collection
     original_users = notes_route.users_collection
+    original_get_storage = notes_route.get_storage
     yield
     notes_route.notes_collection = original_notes
     notes_route.users_collection = original_users
+    notes_route.get_storage = original_get_storage
 
 
 def test_note_model_defaults_to_not_published():
@@ -554,6 +556,57 @@ async def test_upload_note_image_deletes_old_image_before_saving_new():
         file=FakeUploadFile(),
         current_user={"_id": owner_id, "role": "user", "status": "active"},
         storage=storage,
+    )
+
+    assert "old.jpg" in storage.deleted_paths
+
+
+@pytest.mark.asyncio
+async def test_serialize_note_includes_new_keep_fields():
+    from app.routes.notes import serialize_note
+    note = {
+        "_id": ObjectId("64f1f77bcf86cd7994390222"),
+        "title": "Keep Note",
+        "contents": "",
+        "status": "not published",
+        "user": "64f1f77bcf86cd7994390111",
+        "createdAt": None,
+        "updatedAt": None,
+        "color": "teal",
+        "isPinned": True,
+        "labels": ["work"],
+        "noteType": "checklist",
+        "checklistItems": [{"text": "Item 1", "checked": False}],
+        "reminderAt": None,
+        "imagePath": "abc.jpg",
+    }
+
+    result = serialize_note(note, "Jane Doe")
+
+    assert result["color"] == "teal"
+    assert result["isPinned"] is True
+    assert result["labels"] == ["work"]
+    assert result["noteType"] == "checklist"
+    assert result["checklistItems"] == [{"text": "Item 1", "checked": False}]
+    assert result["reminderAt"] is None
+    assert result["imagePath"] == "abc.jpg"
+    assert result["userName"] == "Jane Doe"
+
+
+@pytest.mark.asyncio
+async def test_delete_note_cleans_up_image():
+    owner_id = ObjectId("64f1f77bcf86cd7994390111")
+    note_id = ObjectId("64f1f77bcf86cd7994390222")
+    notes_route.notes_collection = FakeNotesCollection(
+        [{"_id": note_id, "title": "T", "contents": "", "status": "not published",
+          "user": str(owner_id), "imagePath": "old.jpg"}]
+    )
+    storage = FakeStorage()
+    notes_route.get_storage = lambda: storage
+
+    await notes_route.delete_note(
+        str(note_id),
+        current_user={"_id": owner_id, "role": "user", "status": "active"},
     )
 
     assert "old.jpg" in storage.deleted_paths

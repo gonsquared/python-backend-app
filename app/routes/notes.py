@@ -59,12 +59,19 @@ def serialize_note(note, user_name: str = None):
     return {
         "id": str(note["_id"]),
         "title": note["title"],
-        "contents": note["contents"],
+        "contents": note.get("contents", ""),
         "status": note.get("status", "not published"),
         "user": note["user"],
         "userName": user_name or note["user"],
         "createdAt": note.get("createdAt"),
         "updatedAt": note.get("updatedAt"),
+        "color": note.get("color"),
+        "isPinned": note.get("isPinned", False),
+        "labels": note.get("labels", []),
+        "noteType": note.get("noteType", "text"),
+        "checklistItems": note.get("checklistItems", []),
+        "reminderAt": note.get("reminderAt"),
+        "imagePath": note.get("imagePath"),
     }
 
 
@@ -175,7 +182,7 @@ async def update_note(
     update_data = {
         key: value
         for key, value in model_to_dict(updated_note).items()
-        if value is not None
+        if key in updated_note.model_fields_set
     }
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields provided for update")
@@ -198,6 +205,9 @@ async def delete_note(note_id: str, current_user=Depends(get_current_user)):
     result = await notes_collection.delete_one({"_id": ObjectId(note_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Note not found")
+
+    if note.get("imagePath"):
+        get_storage().delete(note["imagePath"])
 
     return {"message": "Note deleted successfully"}
 
