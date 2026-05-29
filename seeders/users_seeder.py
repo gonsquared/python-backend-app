@@ -56,8 +56,8 @@ async def seed_users():
         {"email": admin_email},
         {
             "$set": {
-                "firstName": "Dar",
-                "lastName": "Gon",
+                "firstName": "FName",
+                "lastName": "LName Admin",
                 "email": admin_email,
                 "status": "active",
                 "role": "admin",
