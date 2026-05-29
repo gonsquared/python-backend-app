@@ -60,7 +60,6 @@ def serialize_note(note, user_name: str = None):
         "id": str(note["_id"]),
         "title": note["title"],
         "contents": note.get("contents", ""),
-        "status": note.get("status", "not published"),
         "user": note["user"],
         "userName": user_name or note["user"],
         "createdAt": note.get("createdAt"),

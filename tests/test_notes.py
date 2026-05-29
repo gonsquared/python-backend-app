@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import pytest
 from bson import ObjectId
 from fastapi import HTTPException
-from pydantic import ValidationError
 
 from app.models.note_model import Note, UpdateNote
 from app.routes import notes as notes_route
@@ -90,19 +89,6 @@ def restore_collections():
     notes_route.get_storage = original_get_storage
 
 
-def test_note_model_defaults_to_not_published():
-    note = Note(title="Draft", contents="A first note")
-
-    assert note.title == "Draft"
-    assert note.contents == "A first note"
-    assert note.status == "not published"
-
-
-def test_note_model_rejects_invalid_status():
-    with pytest.raises(ValidationError):
-        Note(title="Draft", contents="A first note", status="private")
-
-
 @pytest.mark.asyncio
 async def test_create_note_sets_creator_and_timestamps():
     user_id = ObjectId("64f1f77bcf86cd7994390111")
@@ -117,7 +103,6 @@ async def test_create_note_sets_creator_and_timestamps():
     assert result["id"] == "64f1f77bcf86cd7994390222"
     assert result["title"] == "Launch notes"
     assert result["contents"] == "Ship it"
-    assert result["status"] == "not published"
     assert result["user"] == str(user_id)
     assert isinstance(collection.inserted_payload["createdAt"], datetime)
     assert isinstance(collection.inserted_payload["updatedAt"], datetime)
@@ -134,14 +119,12 @@ async def test_admin_lists_all_notes():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "One",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
             {
                 "_id": ObjectId("64f1f77bcf86cd7994390223"),
                 "title": "Two",
                 "contents": "Other",
-                "status": "archived",
                 "user": str(other_id),
             },
         ]
@@ -165,14 +148,12 @@ async def test_user_with_manage_notes_permission_lists_all_notes():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Mine",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
             {
                 "_id": ObjectId("64f1f77bcf86cd7994390223"),
                 "title": "Theirs",
                 "contents": "Other",
-                "status": "published",
                 "user": str(other_id),
             },
         ]
@@ -201,14 +182,12 @@ async def test_regular_user_lists_only_their_notes():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Mine",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
             {
                 "_id": ObjectId("64f1f77bcf86cd7994390223"),
                 "title": "Theirs",
                 "contents": "Other",
-                "status": "published",
                 "user": str(other_id),
             },
         ]
@@ -231,14 +210,12 @@ async def test_get_notes_applies_skip_and_limit():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "One",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
             {
                 "_id": ObjectId("64f1f77bcf86cd7994390223"),
                 "title": "Two",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
         ]
@@ -282,14 +259,12 @@ async def test_admin_gets_notes_by_user():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Mine",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             },
             {
                 "_id": ObjectId("64f1f77bcf86cd7994390223"),
                 "title": "Theirs",
                 "contents": "Other",
-                "status": "published",
                 "user": str(other_id),
             },
         ]
@@ -313,7 +288,6 @@ async def test_user_with_manage_notes_permission_gets_notes_by_user():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Theirs",
                 "contents": "Other",
-                "status": "published",
                 "user": str(other_id),
             }
         ]
@@ -341,7 +315,6 @@ async def test_regular_user_gets_their_notes_by_user():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Mine",
                 "contents": "Owned",
-                "status": "published",
                 "user": str(owner_id),
             }
         ]
@@ -414,7 +387,6 @@ async def test_regular_user_cannot_read_someone_elses_note():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Private",
                 "contents": "Nope",
-                "status": "published",
                 "user": str(other_id),
             }
         ]
@@ -458,7 +430,6 @@ async def test_update_note_refreshes_updated_at():
                 "_id": ObjectId("64f1f77bcf86cd7994390222"),
                 "title": "Old",
                 "contents": "Old contents",
-                "status": "not published",
                 "user": str(owner_id),
             }
         ]
@@ -467,7 +438,7 @@ async def test_update_note_refreshes_updated_at():
 
     await notes_route.update_note(
         "64f1f77bcf86cd7994390222",
-        UpdateNote(title="New", status="published"),
+        UpdateNote(title="New"),
         current_user={"_id": owner_id, "role": "user", "status": "active"},
     )
 
@@ -475,7 +446,6 @@ async def test_update_note_refreshes_updated_at():
         "_id": ObjectId("64f1f77bcf86cd7994390222")
     }
     assert collection.updated_data["$set"]["title"] == "New"
-    assert collection.updated_data["$set"]["status"] == "published"
     assert isinstance(collection.updated_data["$set"]["updatedAt"], datetime)
 
 
@@ -508,7 +478,7 @@ async def test_upload_note_image_saves_file_and_updates_note():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     note_id = ObjectId("64f1f77bcf86cd7994390222")
     notes_route.notes_collection = FakeNotesCollection(
-        [{"_id": note_id, "title": "T", "contents": "", "status": "not published", "user": str(owner_id)}]
+        [{"_id": note_id, "title": "T", "contents": "", "user": str(owner_id)}]
     )
     storage = FakeStorage("new.jpg")
 
@@ -527,7 +497,7 @@ async def test_upload_note_image_rejects_invalid_content_type():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     note_id = ObjectId("64f1f77bcf86cd7994390222")
     notes_route.notes_collection = FakeNotesCollection(
-        [{"_id": note_id, "title": "T", "contents": "", "status": "not published", "user": str(owner_id)}]
+        [{"_id": note_id, "title": "T", "contents": "", "user": str(owner_id)}]
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -546,7 +516,7 @@ async def test_upload_note_image_deletes_old_image_before_saving_new():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     note_id = ObjectId("64f1f77bcf86cd7994390222")
     notes_route.notes_collection = FakeNotesCollection(
-        [{"_id": note_id, "title": "T", "contents": "", "status": "not published",
+        [{"_id": note_id, "title": "T", "contents": "",
           "user": str(owner_id), "imagePath": "old.jpg"}]
     )
     storage = FakeStorage("new.jpg")
@@ -568,7 +538,6 @@ async def test_serialize_note_includes_new_keep_fields():
         "_id": ObjectId("64f1f77bcf86cd7994390222"),
         "title": "Keep Note",
         "contents": "",
-        "status": "not published",
         "user": "64f1f77bcf86cd7994390111",
         "createdAt": None,
         "updatedAt": None,
@@ -598,7 +567,7 @@ async def test_delete_note_cleans_up_image():
     owner_id = ObjectId("64f1f77bcf86cd7994390111")
     note_id = ObjectId("64f1f77bcf86cd7994390222")
     notes_route.notes_collection = FakeNotesCollection(
-        [{"_id": note_id, "title": "T", "contents": "", "status": "not published",
+        [{"_id": note_id, "title": "T", "contents": "",
           "user": str(owner_id), "imagePath": "old.jpg"}]
     )
     storage = FakeStorage()
